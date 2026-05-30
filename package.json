@@ -1,0 +1,22 @@
+{
+  "name": "listening-resume",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "listen": "pnpm --filter @listening-resume/cli exec tsx src/index.ts",
+    "test": "pnpm -r test",
+    "test:unit": "pnpm --filter @listening-resume/core test:unit",
+    "test:integration": "pnpm --filter @listening-resume/core test:integration",
+    "test:e2e": "pnpm --filter @listening-resume/cli test:e2e",
+    "test:watch": "pnpm --filter @listening-resume/core test:watch",
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @listening-resume/gui dev",
+    "lint": "pnpm -r lint",
+    "format": "pnpm -r format"
+  },
+  "description": "Record system audio, transcribe and summarize meetings",
+  "type": "module",
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+*.wav
+*.opus
+*.db
+*.db-journal
+.listening-resume/

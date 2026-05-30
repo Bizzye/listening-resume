@@ -1,0 +1,42 @@
+{
+  "name": "@listening-resume/gui",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"node --import tsx --watch --watch-path=. --watch-path=../../packages/core/dist server.ts\"",
+    "dev:ui": "vite",
+    "dev:server": "node --import tsx --watch --watch-path=. --watch-path=../../packages/core/dist server.ts",
+    "build": "vite build",
+    "build:server": "node scripts/build-server.mjs",
+    "build:tauri": "pnpm build && pnpm build:server && pnpm tauri build",
+    "build:linux": "pnpm --filter core build && pnpm build && pnpm build:server && pnpm tauri build",
+    "install:linux": "pnpm build:linux && sudo dpkg -i src-tauri/target/release/bundle/deb/*.deb",
+    "build:windows": "pnpm build && pnpm build:server && powershell -ExecutionPolicy Bypass -File src-tauri/scripts/download-deps-win.ps1 && pnpm tauri build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@listening-resume/core": "workspace:*",
+    "clsx": "^2.1.0",
+    "date-fns": "^4.0.0",
+    "framer-motion": "^12.0.0",
+    "lucide-react": "^0.469.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^9.0.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/cli": "^2.11.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "concurrently": "^9.0.0",
+    "tailwindcss": "^4.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0",
+    "vite": "^6.0.0"
+  }
+}
