@@ -1,9 +1,9 @@
 import type { AnalysisTemplate } from "../ports/analyzer.js";
 
 export const meetingSummaryTemplate: AnalysisTemplate = {
-  id: "meeting-summary",
-  name: "Resumo de Reunião",
-  userPromptTemplate: `Você recebeu a transcrição de uma reunião. Analise cuidadosamente e produza um resumo executivo completo seguindo esta estrutura:
+	id: "meeting-summary",
+	name: "Resumo de Reunião",
+	userPromptTemplate: `Você recebeu a transcrição de uma reunião. Analise cuidadosamente e produza um resumo executivo completo seguindo esta estrutura:
 
 ## 1. Contexto da Reunião
 - Identifique o tipo de reunião (daily, planning, retrospectiva, alinhamento, brainstorm, 1:1, etc.)
@@ -43,5 +43,5 @@ Assuntos que foram mencionados mas não aprofundados, ou explicitamente deixados
 
 Transcrição da reunião:
 {{transcript}}`,
-  builtin: true,
+	builtin: true,
 };

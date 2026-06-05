@@ -20,58 +20,37 @@ execSync(
   { cwd: guiDir, stdio: "inherit" },
 );
 
-// Copy native modules that can't be bundled
+// Copy native modules that can't be bundled. Versions are resolved dynamically from
+// the pnpm store — hardcoding `pkg@x.y.z` silently breaks the bundle on every upgrade
+// (a missing better-sqlite3 crashes the whole server on startup).
+const { readdirSync } = await import("node:fs");
 const pnpmModules = resolve(guiDir, "../../node_modules/.pnpm");
 
-// better-sqlite3
-const betterSqlite = resolve(
-  pnpmModules,
-  "better-sqlite3@11.10.0/node_modules/better-sqlite3",
-);
-if (existsSync(betterSqlite)) {
-  cpSync(betterSqlite, resolve(nodeModulesOut, "better-sqlite3"), {
-    recursive: true,
-  });
-  // Also copy bindings dependency
-  const bindings = resolve(pnpmModules, "bindings@1.5.0/node_modules/bindings");
-  if (existsSync(bindings)) {
-    cpSync(bindings, resolve(nodeModulesOut, "bindings"), { recursive: true });
-  }
-  const fileUri = resolve(
-    pnpmModules,
-    "file-uri-to-path@1.0.0/node_modules/file-uri-to-path",
-  );
-  if (existsSync(fileUri)) {
-    cpSync(fileUri, resolve(nodeModulesOut, "file-uri-to-path"), {
-      recursive: true,
-    });
-  }
-}
-
-// drizzle-orm
-const drizzleOrm = resolve(
-  pnpmModules,
-  "drizzle-orm@0.44.1_better-sqlite3@11.10.0/node_modules/drizzle-orm",
-);
-if (existsSync(drizzleOrm)) {
-  cpSync(drizzleOrm, resolve(nodeModulesOut, "drizzle-orm"), {
-    recursive: true,
-  });
-} else {
-  // Try to find with glob
-  const { readdirSync } = await import("node:fs");
+/** Copy a package from the pnpm store by name, matching any version. Returns true if copied. */
+function copyPnpmPackage(pkg) {
   const dirs = readdirSync(pnpmModules).filter((d) =>
-    d.startsWith("drizzle-orm@"),
+    d.startsWith(`${pkg.replace("/", "+")}@`),
   );
   for (const dir of dirs) {
-    const candidate = resolve(pnpmModules, dir, "node_modules/drizzle-orm");
+    const candidate = resolve(pnpmModules, dir, "node_modules", pkg);
     if (existsSync(candidate)) {
-      cpSync(candidate, resolve(nodeModulesOut, "drizzle-orm"), {
-        recursive: true,
-      });
-      break;
+      cpSync(candidate, resolve(nodeModulesOut, pkg), { recursive: true });
+      return true;
     }
   }
+  return false;
 }
 
-console.log("✓ Server bundled with native modules to src-tauri/resources/");
+// Required native/runtime deps marked --external in the esbuild step above.
+const required = ["better-sqlite3", "bindings", "file-uri-to-path", "drizzle-orm"];
+const missing = [];
+for (const pkg of required) {
+  if (!copyPnpmPackage(pkg)) missing.push(pkg);
+}
+if (missing.length > 0) {
+  console.error(`✗ Failed to bundle native modules: ${missing.join(", ")}`);
+  console.error("  The packaged server will crash on startup. Aborting build.");
+  process.exit(1);
+}
+
+console.log(`✓ Server bundled with native modules (${required.join(", ")}) to src-tauri/resources/`);

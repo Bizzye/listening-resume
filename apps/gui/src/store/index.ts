@@ -170,20 +170,32 @@ export const useStore = create<AppState>((set, get) => ({
   selectedMicDevice:
     localStorage.getItem("listening-resume:mic-device") || null,
   fetchDevices: async () => {
-    try {
-      const devices = await api.getDevices();
-      set({ devices });
-      if (!get().selectedDevice) {
-        const def =
-          devices.find((d) => d.isDefault && d.type === "monitor") ??
-          devices.find((d) => d.type === "monitor");
-        if (def) set({ selectedDevice: def.id });
+    // Retry a few times: in dev the API server restarts on every file change, so
+    // the initial fetch can race a reload and otherwise leave the dropdown stuck
+    // on "Loading devices..." forever (no auto-retry).
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {
+        const devices = await api.getDevices();
+        if (devices.length > 0) {
+          set({ devices, error: null });
+          if (!get().selectedDevice) {
+            const def =
+              devices.find((d) => d.isDefault && d.type === "monitor") ??
+              devices.find((d) => d.type === "monitor");
+            if (def) set({ selectedDevice: def.id });
+          }
+          return;
+        }
+      } catch (err: unknown) {
+        lastErr = err;
       }
-    } catch (err: unknown) {
-      set({
-        error: err instanceof Error ? err.message : "Failed to fetch devices",
-      });
+      await new Promise((r) => setTimeout(r, 800));
     }
+    set({
+      error:
+        lastErr instanceof Error ? lastErr.message : "Failed to fetch devices",
+    });
   },
   setSelectedDevice: (device) => {
     localStorage.setItem("listening-resume:device", device);
@@ -396,9 +408,11 @@ export const useStore = create<AppState>((set, get) => ({
       // Server not available yet
     }
 
+    // Device enumeration self-retries (up to ~6s) to survive a server still booting,
+    // so fire it without blocking the rest of init — otherwise the whole app waits on it.
+    get().fetchDevices();
     await Promise.all([
       get().fetchSessions(),
-      get().fetchDevices(),
       get().fetchConfig(),
       get().fetchTemplates(),
     ]);

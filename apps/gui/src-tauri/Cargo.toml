@@ -31,5 +31,5 @@ tauri-plugin-log = "2"
 tauri-plugin-shell = "2"
 
 [target.'cfg(windows)'.dependencies]
-cpal = "0.15"
+wasapi = "0.14"
 hound = "3.5"

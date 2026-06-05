@@ -74,6 +74,8 @@ export function SessionDetailPage() {
       <div className="p-4 border-b border-border flex items-center gap-3">
         <button
           onClick={() => setView("sessions")}
+          aria-label="Back to sessions"
+          data-testid="session-back-button"
           className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-all cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -145,27 +147,42 @@ export function SessionDetailPage() {
       <div className="flex-1 overflow-y-auto">
         {activeTab === 0 &&
           (!transcript || transcript.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 gap-3">
-              <FileText className="w-8 h-8 text-text-muted" />
-              <p className="text-sm text-text-muted">No transcript yet</p>
-              <Button
-                size="sm"
-                onClick={() => transcribeSession(session.id)}
-                disabled={loading}
-              >
-                <FileText className="w-3.5 h-3.5" />{" "}
-                {loading ? "Transcribing..." : "Transcribe"}
-              </Button>
+            <div className="flex flex-col h-full">
+              {session.duration > 0 && (
+                <AudioPlayerBar sessionId={session.id} duration={session.duration} />
+              )}
+              <div className="flex flex-col items-center justify-center flex-1 gap-3">
+                <FileText className="w-8 h-8 text-text-muted" />
+                <p className="text-sm text-text-muted">No transcript yet</p>
+                <Button
+                  size="sm"
+                  onClick={() => transcribeSession(session.id)}
+                  disabled={loading || session.duration === 0}
+                >
+                  <FileText className="w-3.5 h-3.5" />{" "}
+                  {loading ? "Transcribing..." : "Transcribe"}
+                </Button>
+                {session.duration === 0 && (
+                  <p className="text-xs text-text-muted">
+                    Nenhum áudio capturado nesta sessão.
+                  </p>
+                )}
+              </div>
             </div>
           ) : !meaningfulTranscript || meaningfulTranscript.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 gap-3">
-              <FileText className="w-8 h-8 text-text-muted" />
-              <p className="text-sm text-text-muted">
-                Nenhuma fala detectada nesta gravação
-              </p>
-              <p className="text-xs text-text-muted">
-                O áudio não contém conteúdo de voz identificável.
-              </p>
+            <div className="flex flex-col h-full">
+              {session.duration > 0 && (
+                <AudioPlayerBar sessionId={session.id} duration={session.duration} />
+              )}
+              <div className="flex flex-col items-center justify-center flex-1 gap-3">
+                <FileText className="w-8 h-8 text-text-muted" />
+                <p className="text-sm text-text-muted">
+                  Nenhuma fala detectada nesta gravação
+                </p>
+                <p className="text-xs text-text-muted">
+                  O áudio não contém conteúdo de voz identificável.
+                </p>
+              </div>
             </div>
           ) : (
             <TranscriptPanel
@@ -188,6 +205,117 @@ export function SessionDetailPage() {
         )}
         {activeTab === 2 && <ExportPanel session={session} />}
       </div>
+    </div>
+  );
+}
+
+function AudioPlayerBar({
+  sessionId,
+  duration,
+}: {
+  sessionId: string;
+  duration: number;
+}) {
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startPlayback = useCallback(
+    async (seek = 0) => {
+      setAudioLoading(true);
+      try {
+        const res = await fetch(`${BASE}/sessions/${sessionId}/play`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ seek }),
+        });
+        if (!res.ok) throw new Error();
+        setIsPlaying(true);
+        setCurrentTime(seek);
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        const startTs = Date.now();
+        pollingRef.current = setInterval(() => {
+          const elapsed = (Date.now() - startTs) / 1000;
+          const t = seek + elapsed;
+          if (t >= duration && duration > 0) {
+            setIsPlaying(false);
+            setCurrentTime(duration);
+            if (pollingRef.current) clearInterval(pollingRef.current);
+          } else {
+            setCurrentTime(t);
+          }
+        }, 250);
+      } finally {
+        setAudioLoading(false);
+      }
+    },
+    [sessionId, duration],
+  );
+
+  const stopPlayback = useCallback(async () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    setIsPlaying(false);
+    await fetch(`${BASE}/sessions/${sessionId}/play`, { method: "DELETE" }).catch(() => {});
+  }, [sessionId]);
+
+  const togglePlayback = useCallback(async () => {
+    if (isPlaying) await stopPlayback();
+    else await startPlayback(currentTime < duration ? currentTime : 0);
+  }, [isPlaying, stopPlayback, startPlayback, currentTime, duration]);
+
+  const handleProgressClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const time = ((e.clientX - rect.left) / rect.width) * duration;
+      setCurrentTime(time);
+      if (isPlaying) {
+        stopPlayback().then(() => startPlayback(time));
+      }
+    },
+    [duration, isPlaying, stopPlayback, startPlayback],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      fetch(`${BASE}/sessions/${sessionId}/play`, { method: "DELETE" }).catch(() => {});
+    };
+  }, [sessionId]);
+
+  return (
+    <div className="flex items-center gap-3 p-3 border-b border-border bg-surface-elevated">
+      <button
+        onClick={togglePlayback}
+        disabled={audioLoading}
+        className="w-8 h-8 rounded-full bg-accent flex items-center justify-center hover:bg-accent-hover transition-all cursor-pointer disabled:opacity-50"
+      >
+        {audioLoading ? (
+          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+        ) : isPlaying ? (
+          <Pause className="w-3.5 h-3.5 text-white" />
+        ) : (
+          <Play className="w-3.5 h-3.5 text-white ml-0.5" />
+        )}
+      </button>
+      <span className="text-xs font-mono text-text-secondary">
+        {formatTimestamp(currentTime)}
+      </span>
+      <div
+        className="flex-1 h-1 rounded-full bg-surface-active overflow-hidden cursor-pointer"
+        onClick={handleProgressClick}
+      >
+        <div
+          className="h-full bg-accent rounded-full transition-all"
+          style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+        />
+      </div>
+      <span className="text-xs font-mono text-text-muted">
+        {formatTimestamp(duration)}
+      </span>
     </div>
   );
 }
@@ -305,6 +433,8 @@ function TranscriptPanel({
         <button
           onClick={togglePlayback}
           disabled={audioLoading}
+          aria-label={isPlaying ? "Pause" : "Play"}
+          data-testid="playback-toggle"
           className="w-8 h-8 rounded-full bg-accent flex items-center justify-center hover:bg-accent-hover transition-all cursor-pointer disabled:opacity-50"
         >
           {audioLoading ? (

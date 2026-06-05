@@ -8,7 +8,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ResourceDir = Join-Path $PSScriptRoot ".." "resources"
+$ResourceDir = Join-Path (Join-Path $PSScriptRoot "..") "resources"
 $BinDir = Join-Path $ResourceDir "bin"
 
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
@@ -24,9 +24,12 @@ if (-Not (Test-Path $NodeExe)) {
     Write-Host "Node.js already exists at $NodeExe"
 }
 
-# --- FFmpeg ---
+# --- FFmpeg + FFplay ---
+# Both come from the same essentials zip. Re-extract if EITHER is missing — otherwise
+# a pre-existing ffmpeg.exe would skip the block and ffplay.exe would never be bundled.
 $FfmpegExe = Join-Path $BinDir "ffmpeg.exe"
-if (-Not (Test-Path $FfmpegExe)) {
+$FfplayExe = Join-Path $BinDir "ffplay.exe"
+if (-Not (Test-Path $FfmpegExe) -or -Not (Test-Path $FfplayExe)) {
     Write-Host "Downloading FFmpeg $FfmpegVersion..."
     $ffmpegZip = Join-Path $env:TEMP "ffmpeg.zip"
     $ffmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n$FfmpegVersion-latest-win64-gpl-$FfmpegVersion.zip"
@@ -39,13 +42,15 @@ if (-Not (Test-Path $FfmpegExe)) {
     if (Test-Path $extractDir) { Remove-Item -Recurse -Force $extractDir }
     Expand-Archive -Path $ffmpegZip -DestinationPath $extractDir
     
-    # Find ffmpeg.exe inside extracted folder
-    $found = Get-ChildItem -Path $extractDir -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
-    if ($found) {
-        Copy-Item $found.FullName $FfmpegExe
-        Write-Host "FFmpeg extracted to $FfmpegExe"
-    } else {
-        throw "ffmpeg.exe not found in archive"
+    # Find ffmpeg.exe and ffplay.exe inside extracted folder
+    foreach ($exe in "ffmpeg.exe", "ffplay.exe") {
+        $found = Get-ChildItem -Path $extractDir -Recurse -Filter $exe | Select-Object -First 1
+        if ($found) {
+            Copy-Item $found.FullName (Join-Path $BinDir $exe)
+            Write-Host "$exe extracted to $BinDir"
+        } else {
+            throw "$exe not found in archive"
+        }
     }
     
     # Cleanup
@@ -59,3 +64,4 @@ Write-Host ""
 Write-Host "Done! Binaries are in: $BinDir"
 Write-Host "  - node.exe   ($(("{0:N1}" -f ((Get-Item $NodeExe).Length / 1MB))) MB)"
 Write-Host "  - ffmpeg.exe ($(("{0:N1}" -f ((Get-Item $FfmpegExe).Length / 1MB))) MB)"
+Write-Host "  - ffplay.exe ($(("{0:N1}" -f ((Get-Item $FfplayExe).Length / 1MB))) MB)"

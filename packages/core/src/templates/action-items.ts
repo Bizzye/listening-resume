@@ -1,9 +1,9 @@
 import type { AnalysisTemplate } from "../ports/analyzer.js";
 
 export const actionItemsTemplate: AnalysisTemplate = {
-  id: "action-items",
-  name: "Notas de Videoaula",
-  userPromptTemplate: `Você recebeu a transcrição de uma videoaula ou conteúdo educacional. Seu objetivo é transformar isso em notas de estudo de altíssima qualidade que permitam revisão rápida sem precisar reassistir o vídeo.
+	id: "action-items",
+	name: "Notas de Videoaula",
+	userPromptTemplate: `Você recebeu a transcrição de uma videoaula ou conteúdo educacional. Seu objetivo é transformar isso em notas de estudo de altíssima qualidade que permitam revisão rápida sem precisar reassistir o vídeo.
 
 ## 1. Visão Geral
 - **Tema**: [Assunto principal da aula]
@@ -55,5 +55,5 @@ Gere 3-5 perguntas que testam a compreensão do conteúdo (estilo flashcard):
 
 Transcrição da videoaula:
 {{transcript}}`,
-  builtin: true,
+	builtin: true,
 };

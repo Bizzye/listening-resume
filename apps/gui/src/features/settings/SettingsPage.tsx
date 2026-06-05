@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useStore } from "../../store";
 import {
   Headphones,
@@ -22,8 +22,16 @@ export function SettingsPage() {
     setSelectedMicDevice,
     templates,
     fetchConfig,
+    fetchDevices,
     setView,
   } = useStore();
+
+  // Re-fetch devices when opening Settings — recovers if the initial app-load
+  // fetch failed (e.g. raced a dev server restart) and left the list empty.
+  useEffect(() => {
+    if (devices.length === 0) fetchDevices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"idle" | "success" | "error">(
     "idle",
@@ -77,13 +85,17 @@ export function SettingsPage() {
           <select
             value={selectedDevice ?? ""}
             onChange={(e) => setSelectedDevice(e.target.value)}
+            aria-label="Recording device"
+            data-testid="recording-device-select"
             className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-accent/50 cursor-pointer [color-scheme:dark]"
           >
-            {devices.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name} {d.isDefault ? "(default)" : ""}
-              </option>
-            ))}
+            {devices
+              .filter((d) => d.type !== "microphone")
+              .map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} {d.isDefault ? "(default)" : ""}
+                </option>
+              ))}
             {devices.length === 0 && (
               <option value="">Loading devices...</option>
             )}
@@ -96,18 +108,19 @@ export function SettingsPage() {
           <button
             onClick={testAudio}
             disabled={testing}
+            data-testid="test-sound-button"
             className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Volume2 className="w-4 h-4" />
             {testing ? "Playing..." : "Test Sound"}
           </button>
           {testResult === "success" && (
-            <p className="text-xs text-success mt-1">
+            <p data-testid="test-sound-result" className="text-xs text-success mt-1">
               Sound played — if you heard it, this device is correct.
             </p>
           )}
           {testResult === "error" && (
-            <p className="text-xs text-recording mt-1">
+            <p data-testid="test-sound-result" className="text-xs text-recording mt-1">
               Failed to play test sound.
             </p>
           )}
@@ -118,6 +131,8 @@ export function SettingsPage() {
           <select
             value={selectedMicDevice ?? ""}
             onChange={(e) => setSelectedMicDevice(e.target.value || null)}
+            aria-label="Microphone device"
+            data-testid="mic-device-select"
             className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-accent/50 cursor-pointer [color-scheme:dark]"
           >
             <option value="">Nenhum (somente áudio do sistema)</option>
@@ -357,7 +372,7 @@ export function SettingsPage() {
         />
         <ServiceStatus name="FFmpeg" status="connected" />
         <ServiceStatus
-          name="PipeWire"
+          name={navigator.platform.startsWith("Win") ? "WASAPI" : "PipeWire"}
           status={devices.length > 0 ? "connected" : "disconnected"}
         />
       </SettingsSection>

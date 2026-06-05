@@ -11,6 +11,7 @@
     "test:watch": "pnpm --filter @listening-resume/core test:watch",
     "build": "pnpm -r build",
     "dev": "pnpm --filter @listening-resume/gui dev",
+    "build:windows": "pnpm --filter @listening-resume/gui build:windows",
     "lint": "pnpm -r lint",
     "format": "pnpm -r format"
   },

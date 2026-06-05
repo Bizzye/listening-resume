@@ -19,6 +19,22 @@ import {
   logger,
 } from "@listening-resume/core";
 
+// In the Tauri bundle, node.exe sits at resources/bin/ and ffmpeg.exe is alongside it.
+// The Rust launcher prepends that dir to PATH, but add it here too as a safety net.
+if (process.platform === "win32") {
+  const bundledBin = path.join(path.dirname(process.execPath), "..", "bin");
+  const altBin = path.dirname(process.execPath);
+  // Dev mode runs via system node, so the bundled binaries aren't next to node.exe.
+  // Fall back to the repo's src-tauri/resources/bin where download-deps-win.ps1 puts them.
+  const devBin = path.join(import.meta.dirname, "src-tauri", "resources", "bin");
+  for (const dir of [bundledBin, altBin, devBin]) {
+    if (fs.existsSync(path.join(dir, "ffmpeg.exe"))) {
+      process.env.PATH = `${dir}${path.delimiter}${process.env.PATH ?? ""}`;
+      break;
+    }
+  }
+}
+
 // Load .env from workspace root
 const rootDir = path.resolve(import.meta.dirname, "../..");
 const envPath = path.join(rootDir, ".env");
@@ -54,7 +70,39 @@ const capture =
   process.platform === "win32"
     ? new FFmpegWasapiAdapter()
     : new FFmpegPulseAdapter();
+
+// Prevent unhandled 'error' events on the capture adapter from crashing the server.
+capture.on("error", (err: Error) => {
+  logger.error(`[capture] ${err.message}`);
+});
+
 const recordingService = new RecordingService(capture, repo, storage);
+
+// Boot reconcile: on a fresh server start nothing is actively recording or
+// processing, yet a previous crash/restart can leave sessions stuck in a
+// transient state ("recording", "transcribing", "analyzing"). Resolve them so
+// the UI never shows a permanently-spinning badge.
+try {
+  for (const s of repo.listSessions(500)) {
+    if (s.status === "recording") {
+      const chunks = repo.getChunks(s.id);
+      repo.updateSession(s.id, {
+        status: chunks.length > 0 ? "stopped" : "failed",
+        endedAt: s.endedAt ?? new Date().toISOString(),
+      });
+    } else if (s.status === "transcribing") {
+      repo.updateSession(s.id, { status: "stopped" });
+    } else if (s.status === "analyzing") {
+      // If a transcript exists it reached "transcribed"; otherwise fall back.
+      const hasTranscript = !!repo.getTranscript(s.id);
+      repo.updateSession(s.id, {
+        status: hasTranscript ? "transcribed" : "stopped",
+      });
+    }
+  }
+} catch (err) {
+  logger.error(`[boot-reconcile] ${(err as Error).message}`);
+}
 
 let activeSessionId: string | null = null;
 let recordingStartTime: number | null = null;
@@ -96,6 +144,32 @@ if (!groqApiKey && fs.existsSync(configEnvPath)) {
   }
 }
 
+function generateBeepWav(filePath: string): void {
+  const sampleRate = 44100;
+  const numSamples = Math.floor(sampleRate * 1.5);
+  const buf = Buffer.alloc(44 + numSamples * 2);
+  buf.write("RIFF", 0);
+  buf.writeUInt32LE(36 + numSamples * 2, 4);
+  buf.write("WAVE", 8);
+  buf.write("fmt ", 12);
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20);
+  buf.writeUInt16LE(1, 22);
+  buf.writeUInt32LE(sampleRate, 24);
+  buf.writeUInt32LE(sampleRate * 2, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
+  buf.write("data", 36);
+  buf.writeUInt32LE(numSamples * 2, 40);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const freq = t < 0.5 ? 880 : t < 1.0 ? 660 : 880;
+    const sample = Math.sin(2 * Math.PI * freq * t) * 0.7 * 32767;
+    buf.writeInt16LE(Math.round(sample), 44 + i * 2);
+  }
+  fs.writeFileSync(filePath, buf);
+}
+
 function json(res: http.ServerResponse, data: unknown, status = 200) {
   res.writeHead(status, {
     "Content-Type": "application/json",
@@ -114,25 +188,43 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
-/** Calculate total audio duration (seconds) from WAV files on disk */
-function getAudioDuration(
-  sessionId: string,
-  sampleRate = 16000,
-  channels = 1,
-): number {
+/** Calculate total audio duration (seconds) from WAV files on disk.
+ * Reads each WAV header for its real sample rate / channels / bit depth —
+ * the WASAPI adapter records at the device's native format (e.g. 48000 Hz
+ * stereo), not the requested 16000/1, so assuming defaults overcounts. */
+function getAudioDuration(sessionId: string): number {
   const audioDir = path.join(dataDir, "sessions", sessionId, "audio");
   if (!fs.existsSync(audioDir)) return 0;
   const wavFiles = fs
     .readdirSync(audioDir)
     .filter((f) => f.endsWith(".wav"))
     .sort();
-  let totalBytes = 0;
+  let totalSeconds = 0;
   for (const f of wavFiles) {
-    const stat = fs.statSync(path.join(audioDir, f));
-    totalBytes += Math.max(0, stat.size - 44); // subtract WAV header
+    const filePath = path.join(audioDir, f);
+    try {
+      const fd = fs.openSync(filePath, "r");
+      const header = Buffer.alloc(44);
+      fs.readSync(fd, header, 0, 44, 0);
+      fs.closeSync(fd);
+      // WAV offsets: channels@22, sampleRate@24, bitsPerSample@34, dataSize@40
+      const channels = header.readUInt16LE(22);
+      const sampleRate = header.readUInt32LE(24);
+      const bitsPerSample = header.readUInt16LE(34);
+      let dataBytes = header.readUInt32LE(40);
+      const stat = fs.statSync(filePath);
+      const actualData = Math.max(0, stat.size - 44);
+      // Header dataSize can be stale if the writer crashed; trust file size if smaller.
+      if (dataBytes === 0 || dataBytes > actualData) dataBytes = actualData;
+      const bytesPerSecond = sampleRate * channels * (bitsPerSample / 8);
+      if (bytesPerSecond > 0) totalSeconds += dataBytes / bytesPerSecond;
+    } catch {
+      // Fallback: assume 16-bit mono 16000 Hz if header unreadable
+      const stat = fs.statSync(filePath);
+      totalSeconds += Math.max(0, stat.size - 44) / 32000;
+    }
   }
-  const bytesPerSecond = sampleRate * channels * 2; // 16-bit PCM
-  return Math.round(totalBytes / bytesPerSecond);
+  return Math.round(totalSeconds);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -160,21 +252,39 @@ const server = http.createServer(async (req, res) => {
       const testFile = path.join(dataDir, "test-tone.wav");
       const { execSync } = await import("node:child_process");
       try {
-        // Generate tone file if it doesn't exist
+        // Generate tone WAV in Node.js — no ffmpeg required
         if (!fs.existsSync(testFile)) {
-          execSync(
-            `ffmpeg -y -f lavfi -i "sine=frequency=880:duration=0.5" -f lavfi -i "sine=frequency=660:duration=0.5" -f lavfi -i "sine=frequency=880:duration=0.5" -filter_complex "[0][1][2]concat=n=3:v=0:a=1" "${testFile}"`,
-            { timeout: 5000, stdio: "pipe" },
-          );
+          generateBeepWav(testFile);
         }
-        // Play test tone using platform-appropriate method
+        // Play using platform-appropriate built-in tools
         if (process.platform === "win32") {
-          execSync(`ffplay -nodisp -autoexit -loglevel quiet "${testFile}"`, {
-            timeout: 5000,
-            stdio: "pipe",
-          });
+          // Strip "(Loopback)" suffix to get the render (output) device name for routing.
+          const outputDevice = audioDevice.replace(/ \(Loopback\)$/i, "").trim();
+
+          // Preferred: native WASAPI binary renders the tone directly to the selected
+          // device. SoundPlayer (the fallback) can only reach the system default.
+          let routedToDevice = false;
+          if (
+            capture instanceof FFmpegWasapiAdapter &&
+            (capture as FFmpegWasapiAdapter).hasNativeBinary
+          ) {
+            try {
+              await (capture as FFmpegWasapiAdapter).playTestTone(outputDevice);
+              routedToDevice = true;
+            } catch {
+              // Native tone failed — fall through to SoundPlayer (default device).
+            }
+          }
+
+          if (!routedToDevice) {
+            const psPath = testFile.replace(/\\/g, "/");
+            execSync(
+              `powershell -NoProfile -Command "$sp = New-Object System.Media.SoundPlayer '${psPath}'; $sp.PlaySync()"`,
+              { timeout: 5000, stdio: "pipe" },
+            );
+          }
         } else {
-          // Strip .monitor suffix to get the sink name
+          // Strip .monitor suffix to get the PipeWire sink name
           const sink = audioDevice.replace(/\.monitor$/, "");
           execSync(`pw-play --target="${sink}" "${testFile}"`, {
             timeout: 5000,
@@ -201,11 +311,7 @@ const server = http.createServer(async (req, res) => {
       // Enrich with chunk count + duration + transcript preview
       const enriched = sessions.map((s) => {
         const chunks = repo.getChunks(s.id);
-        const duration = getAudioDuration(
-          s.id,
-          config.audio.sampleRate,
-          config.audio.channels,
-        );
+        const duration = getAudioDuration(s.id);
         const transcript = repo.getTranscript(s.id);
         let preview: string | null = null;
         if (transcript && transcript.segments.length > 0) {
@@ -262,11 +368,7 @@ const server = http.createServer(async (req, res) => {
       const chunks = repo.getChunks(session.id);
       const transcript = repo.getTranscript(session.id);
       const analyses = repo.getAnalyses(session.id);
-      const duration = getAudioDuration(
-        session.id,
-        config.audio.sampleRate,
-        config.audio.channels,
-      );
+      const duration = getAudioDuration(session.id);
 
       return json(res, {
         session: {
@@ -369,6 +471,9 @@ const server = http.createServer(async (req, res) => {
       if (!activeSessionId) {
         return json(res, { error: "No active recording" }, 400);
       }
+      if (typeof (capture as any).setInputMute !== "function") {
+        return json(res, { target, muted, supported: false });
+      }
       try {
         await (capture as any).setInputMute(target, muted);
         return json(res, { target, muted });
@@ -428,11 +533,20 @@ const server = http.createServer(async (req, res) => {
       });
 
       repo.updateSession(session.id, { status: "transcribing" });
-      const transcript = await transcriptionService.transcribeSession(
-        session.id,
-        config.transcription.language,
-        config.transcription.prompt || undefined,
-      );
+      let transcript: Awaited<
+        ReturnType<typeof transcriptionService.transcribeSession>
+      >;
+      try {
+        transcript = await transcriptionService.transcribeSession(
+          session.id,
+          config.transcription.language,
+          config.transcription.prompt || undefined,
+        );
+      } catch (err) {
+        // Roll back so the session doesn't stay stuck in "transcribing".
+        repo.updateSession(session.id, { status: "stopped" });
+        throw err;
+      }
       repo.updateSession(session.id, { status: "transcribed" });
 
       return json(res, {
@@ -460,17 +574,36 @@ const server = http.createServer(async (req, res) => {
       );
       if (!template) return json(res, { error: "Template not found" }, 404);
 
+      // Don't enter "analyzing" if there's nothing to analyze.
+      const existingTranscript = repo.getTranscript(session.id);
+      if (!existingTranscript) {
+        return json(
+          res,
+          { error: "No transcript found for session. Transcribe first." },
+          400,
+        );
+      }
+
       const analyzer = new OllamaAdapter(config.analysis.model);
       const fallback = groqApiKey
         ? new GroqLLMAdapter(groqApiKey, config.analysis.fallback?.model)
         : null;
       const analysisService = new AnalysisService(analyzer, fallback, repo);
 
+      const prevStatus = session.status;
       repo.updateSession(session.id, { status: "analyzing" });
-      const analysis = await analysisService.analyzeSession(
-        session.id,
-        template,
-      );
+      let analysis: Awaited<
+        ReturnType<typeof analysisService.analyzeSession>
+      >;
+      try {
+        analysis = await analysisService.analyzeSession(session.id, template);
+      } catch (err) {
+        // Roll back so the session doesn't stay stuck in "analyzing".
+        repo.updateSession(session.id, {
+          status: prevStatus === "completed" ? "completed" : "transcribed",
+        });
+        throw err;
+      }
       repo.updateSession(session.id, { status: "completed" });
 
       return json(res, { analysis });
@@ -625,14 +758,68 @@ const server = http.createServer(async (req, res) => {
       });
       const { seek } = body ? JSON.parse(body) : { seek: 0 };
 
-      // Play via ffplay (headless, no video window)
-      const args = ["-nodisp", "-autoexit", "-loglevel", "quiet"];
-      if (seek && seek > 0) {
-        args.push("-ss", String(seek));
+      // Check if ffplay is available; on Windows fall back to PowerShell SoundPlayer.
+      let ffplayAvailable = true;
+      if (process.platform === "win32") {
+        try {
+          const { execSync: es } = await import("node:child_process");
+          es("where ffplay", { stdio: "pipe", timeout: 2000 });
+        } catch {
+          ffplayAvailable = false;
+        }
       }
-      args.push(audioFile);
 
-      const proc = spawn("ffplay", args, { stdio: "ignore" });
+      let proc: import("node:child_process").ChildProcess;
+      if (ffplayAvailable) {
+        // Play via ffplay (headless, no video window)
+        const args = ["-nodisp", "-autoexit", "-loglevel", "quiet"];
+        if (seek && seek > 0) args.push("-ss", String(seek));
+        args.push(audioFile);
+        proc = spawn("ffplay", args, { stdio: "ignore" });
+      } else {
+        // Windows fallback: PowerShell System.Media.SoundPlayer. SoundPlayer can't
+        // seek — it always plays the file from the start. To honor a seek, trim the
+        // WAV from the seek point into a temp file with the bundled ffmpeg, then play
+        // that. (-ss before -i is sample-accurate for PCM WAV since every sample is a
+        // seek point, and fast.)
+        let fileToPlay = audioFile;
+        if (seek && seek > 0) {
+          try {
+            const os = await import("node:os");
+            const { promisify } = await import("node:util");
+            const { exec } = await import("node:child_process");
+            const execAsync = promisify(exec);
+            const seekFile = path.join(os.tmpdir(), `seek_${session.id}.wav`);
+            // -bitexact suppresses ffmpeg's ISFT metadata chunk so the data chunk
+            // stays at the standard offset — keeps SoundPlayer happy.
+            await execAsync(
+              `ffmpeg -y -loglevel quiet -bitexact -ss ${seek} -i "${audioFile}" -bitexact "${seekFile}"`,
+            );
+            fileToPlay = seekFile;
+          } catch {
+            // ffmpeg trim failed — play from start rather than not at all.
+            fileToPlay = audioFile;
+          }
+        }
+        const safeFile = fileToPlay.replace(/'/g, "''");
+        proc = spawn(
+          "powershell",
+          [
+            "-NoProfile", "-NonInteractive", "-Command",
+            `$sp = New-Object System.Media.SoundPlayer '${safeFile}'; $sp.PlaySync()`,
+          ],
+          { stdio: "ignore" },
+        );
+      }
+
+      // Always guard against spawn errors to prevent server crash.
+      proc.on("error", (err) => {
+        logger.error(`Playback spawn error: ${err.message}`);
+        if ((globalThis as any).__playbackProcess === proc) {
+          (globalThis as any).__playbackProcess = null;
+        }
+      });
+
       (globalThis as any).__playbackProcess = proc;
       (globalThis as any).__playbackStartTime = Date.now();
       (globalThis as any).__playbackSeekOffset = seek || 0;
@@ -647,6 +834,7 @@ const server = http.createServer(async (req, res) => {
         playing: true,
         startTime: Date.now(),
         seek: seek || 0,
+        backend: ffplayAvailable ? "ffplay" : "powershell",
       });
     }
 
@@ -660,6 +848,16 @@ const server = http.createServer(async (req, res) => {
           (globalThis as any).__playbackProcess.kill();
         } catch {}
         (globalThis as any).__playbackProcess = null;
+      }
+      // Clean up the seek-trim temp file (created by the SoundPlayer fallback path).
+      const playId = route.split("/")[3];
+      if (playId) {
+        const sessions = repo.listSessions(200);
+        const sess = sessions.find((s) => s.id.startsWith(playId));
+        if (sess) {
+          const seekFile = path.join(os.tmpdir(), `seek_${sess.id}.wav`);
+          fs.rmSync(seekFile, { force: true });
+        }
       }
       return json(res, { playing: false });
     }
@@ -770,11 +968,17 @@ const server = http.createServer(async (req, res) => {
 
     // POST /api/config/groq-key — set Groq API key
     if (route === "/api/config/groq-key" && req.method === "POST") {
-      // Only allow requests from localhost origins
+      // Only allow requests from local origins. This includes the Vite dev server
+      // (http://localhost:1420) AND the packaged Tauri webview, whose origin is
+      // `http://tauri.localhost` (Windows/WebView2) or `tauri://localhost`
+      // (macOS/Linux) — the old localhost-only check rejected those with a 403,
+      // surfacing as "Erro ao salvar a chave" in the installed app.
       const origin = req.headers.origin || req.headers.referer || "";
       if (
         origin &&
-        !origin.match(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?/)
+        !origin.match(
+          /^(https?|tauri):\/\/(localhost|127\.0\.0\.1|tauri\.localhost)(:\d+)?(\/|$)/,
+        )
       ) {
         return json(res, { error: "Forbidden" }, 403);
       }
@@ -983,9 +1187,23 @@ const server = http.createServer(async (req, res) => {
 });
 
 const PORT = 3456;
+
+server.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`Port ${PORT} already in use. Kill the other process and retry.`);
+    process.exit(1);
+  }
+  throw err;
+});
+
 server.listen(PORT, () => {
   logger.info(`API server running on http://localhost:${PORT}`);
-  console.log(`🎙  Listening Resume API — http://localhost:${PORT}`);
+  console.log(`API server running on http://localhost:${PORT}`);
   console.log(`   Audio device: ${config.audio.device}`);
   console.log(`   Data dir: ${dataDir}`);
 });
+
+// On SIGTERM (sent by Node watch mode on restart) exit immediately so the port
+// is released before the new instance tries to bind.
+process.on("SIGTERM", () => process.exit(0));
+process.on("SIGINT", () => process.exit(0));

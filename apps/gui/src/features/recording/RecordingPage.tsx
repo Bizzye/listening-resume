@@ -131,6 +131,8 @@ export function RecordingPage() {
           {/* Stop button */}
           <button
             onClick={stopRecording}
+            aria-label="Stop recording"
+            data-testid="stop-recording-button"
             className="w-16 h-16 rounded-full bg-recording hover:bg-red-500 flex items-center justify-center shadow-xl shadow-recording/30 transition-all cursor-pointer"
           >
             <Square className="w-6 h-6 text-white fill-white" />

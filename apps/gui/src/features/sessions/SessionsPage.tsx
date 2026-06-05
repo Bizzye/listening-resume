@@ -31,7 +31,12 @@ export function SessionsPage() {
 
       <div className="space-y-2">
         {filtered.map((session) => (
-          <Card key={session.id} onClick={() => selectSession(session.id)}>
+          <Card
+            key={session.id}
+            onClick={() => selectSession(session.id)}
+            data-testid="session-card"
+            data-session-id={session.id}
+          >
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">

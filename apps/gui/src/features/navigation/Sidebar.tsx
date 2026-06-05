@@ -29,6 +29,8 @@ export function Sidebar() {
       {/* Record button */}
       <button
         onClick={startRecording}
+        aria-label={isRecording ? "Recording in progress" : "Start recording"}
+        data-testid="sidebar-record-button"
         className={clsx(
           "w-10 h-10 rounded-full flex items-center justify-center transition-all mb-4 cursor-pointer",
           isRecording

@@ -210,10 +210,22 @@ pub fn run() {
         format!("{}:{}", bin_dir.display(), path_env)
       };
 
-      let child = Command::new(&node_bin)
+      let mut cmd = Command::new(&node_bin);
+      cmd
         .arg(&server_script)
         .env("NODE_PATH", &node_modules)
-        .env("PATH", &new_path)
+        .env("PATH", &new_path);
+
+      // On Windows, suppress the console window the child node.exe would otherwise
+      // pop up — the API server is an internal detail, not something the end user
+      // should see. CREATE_NO_WINDOW (0x08000000).
+      #[cfg(target_os = "windows")]
+      {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+      }
+
+      let child = cmd
         .spawn()
         .unwrap_or_else(|e| panic!(
           "Failed to start API server: {}. Node binary: {:?}. Ensure Node.js is installed.",
