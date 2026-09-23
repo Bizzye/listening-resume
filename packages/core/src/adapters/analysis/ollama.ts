@@ -30,6 +30,16 @@ export class OllamaAdapter implements AnalyzerPort {
 					{ role: "system", content: systemPrompt },
 					{ role: "user", content: userPrompt },
 				],
+				options: {
+					// Ollama defaults num_ctx to ~2048, which silently truncates long
+					// lecture transcripts — the model would only "see" the first minutes.
+					// 8192 fits an ~40min class AND keeps the 8B model fully on an 8GB
+					// GPU (bigger spills to CPU and the analysis crawls). For long
+					// lectures, Groq (70B, 128k ctx) is the configured primary.
+					num_ctx: 8192,
+					num_predict: 4096,
+					temperature: 0.3,
+				},
 			});
 
 			return {

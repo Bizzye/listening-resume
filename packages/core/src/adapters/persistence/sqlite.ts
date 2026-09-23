@@ -12,6 +12,7 @@ import type { AnalysisTemplate } from "../../ports/analyzer.js";
 import type { SessionRepository } from "../../ports/repository.js";
 import { actionItemsTemplate } from "../../templates/action-items.js";
 import { meetingSummaryTemplate } from "../../templates/meeting-summary.js";
+import { videoaulaInsanaTemplate } from "../../templates/videoaula-insana.js";
 import * as schema from "./schema.js";
 
 export class SQLiteRepository implements SessionRepository {
@@ -83,7 +84,7 @@ export class SQLiteRepository implements SessionRepository {
 
 	private seedBuiltinTemplates(): void {
 		const now = new Date().toISOString();
-		const builtins = [meetingSummaryTemplate, actionItemsTemplate];
+		const builtins = [meetingSummaryTemplate, actionItemsTemplate, videoaulaInsanaTemplate];
 		for (const t of builtins) {
 			const existing = this.db
 				.select()

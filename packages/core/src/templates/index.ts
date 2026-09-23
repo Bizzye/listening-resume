@@ -1,9 +1,14 @@
 import type { AnalysisTemplate } from "../ports/analyzer.js";
 import { actionItemsTemplate } from "./action-items.js";
 import { meetingSummaryTemplate } from "./meeting-summary.js";
+import { videoaulaInsanaTemplate } from "./videoaula-insana.js";
 
 /** Builtin templates used for seeding the database */
-export const builtinTemplates: AnalysisTemplate[] = [meetingSummaryTemplate, actionItemsTemplate];
+export const builtinTemplates: AnalysisTemplate[] = [
+	meetingSummaryTemplate,
+	actionItemsTemplate,
+	videoaulaInsanaTemplate,
+];
 
 /**
  * @deprecated Use repo.getTemplate() instead — templates are now stored in the database.

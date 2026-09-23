@@ -30,6 +30,12 @@ export class GroqLLMAdapter implements AnalyzerPort {
 					{ role: "system", content: systemPrompt },
 					{ role: "user", content: userPrompt },
 				],
+				// Low temperature for fidelity to the transcript. max_tokens is kept at
+				// 4096 because Groq counts (prompt + max_tokens) against the per-minute
+				// token limit (free tier = 12k TPM); 8k tripped 413 "Request too large"
+				// on medium lectures. 4096 still yields a long, structured document.
+				temperature: 0.3,
+				max_tokens: 4096,
 			});
 
 			const content = response.choices[0]?.message?.content;

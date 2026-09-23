@@ -204,20 +204,40 @@ function getAudioDuration(sessionId: string): number {
     const filePath = path.join(audioDir, f);
     try {
       const fd = fs.openSync(filePath, "r");
-      const header = Buffer.alloc(44);
-      fs.readSync(fd, header, 0, 44, 0);
+      const header = Buffer.alloc(4096);
+      const read = fs.readSync(fd, header, 0, 4096, 0);
       fs.closeSync(fd);
-      // WAV offsets: channels@22, sampleRate@24, bitsPerSample@34, dataSize@40
-      const channels = header.readUInt16LE(22);
-      const sampleRate = header.readUInt32LE(24);
-      const bitsPerSample = header.readUInt16LE(34);
-      let dataBytes = header.readUInt32LE(40);
       const stat = fs.statSync(filePath);
-      const actualData = Math.max(0, stat.size - 44);
-      // Header dataSize can be stale if the writer crashed; trust file size if smaller.
-      if (dataBytes === 0 || dataBytes > actualData) dataBytes = actualData;
+
+      // Walk the RIFF chunks instead of using fixed offsets: ffmpeg inserts a
+      // LIST/INFO (and sometimes fact) chunk between `fmt ` and `data`, so the
+      // data size never lives at offset 40 — reading it there yields the LIST
+      // size (~26 bytes) and the duration collapses to 0:00.
+      let channels = 0;
+      let sampleRate = 0;
+      let bitsPerSample = 0;
+      let dataBytes = 0;
+      let pos = 12; // skip RIFF / size / WAVE
+      while (pos + 8 <= read) {
+        const chunkId = header.toString("ascii", pos, pos + 4);
+        const chunkSize = header.readUInt32LE(pos + 4);
+        if (chunkId === "fmt ") {
+          channels = header.readUInt16LE(pos + 10);
+          sampleRate = header.readUInt32LE(pos + 12);
+          bitsPerSample = header.readUInt16LE(pos + 22);
+        } else if (chunkId === "data") {
+          const dataOffset = pos + 8;
+          const remaining = Math.max(0, stat.size - dataOffset);
+          // Streaming WAVs write a 0 or stale size; trust file size when off.
+          dataBytes =
+            chunkSize === 0 || chunkSize > remaining ? remaining : chunkSize;
+          break;
+        }
+        pos += 8 + chunkSize + (chunkSize & 1); // chunks are word-aligned
+      }
       const bytesPerSecond = sampleRate * channels * (bitsPerSample / 8);
-      if (bytesPerSecond > 0) totalSeconds += dataBytes / bytesPerSecond;
+      if (bytesPerSecond > 0 && dataBytes > 0)
+        totalSeconds += dataBytes / bytesPerSecond;
     } catch {
       // Fallback: assume 16-bit mono 16000 Hz if header unreadable
       const stat = fs.statSync(filePath);
@@ -584,10 +604,19 @@ const server = http.createServer(async (req, res) => {
         );
       }
 
-      const analyzer = new OllamaAdapter(config.analysis.model);
-      const fallback = groqApiKey
-        ? new GroqLLMAdapter(groqApiKey, config.analysis.fallback?.model)
+      const ollama = new OllamaAdapter(config.analysis.model);
+      const groq = groqApiKey
+        ? new GroqLLMAdapter(
+            groqApiKey,
+            config.analysis.fallback?.model ?? "llama-3.3-70b-versatile",
+          )
         : null;
+      // Respect the configured provider. Groq (cloud 70b, 128k context) extracts
+      // far more from long lectures; Ollama (local 8b) is the private, free option.
+      // Whichever isn't primary becomes the automatic fallback.
+      const groqPrimary = config.analysis.provider === "groq" && groq !== null;
+      const analyzer = groqPrimary ? groq : ollama;
+      const fallback = groqPrimary ? ollama : groq;
       const analysisService = new AnalysisService(analyzer, fallback, repo);
 
       const prevStatus = session.status;

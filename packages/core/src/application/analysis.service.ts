@@ -37,7 +37,10 @@ export class AnalysisService {
 			});
 		} catch (err) {
 			if (!this.fallbackAnalyzer) throw err;
-			logger.warn(`Primary analyzer failed, trying fallback...`);
+			const reason = err instanceof Error ? err.message : String(err);
+			logger.warn(
+				`Primary analyzer (${this.analyzer.provider}) failed: ${reason} — trying fallback (${this.fallbackAnalyzer.provider})...`,
+			);
 			result = await this.fallbackAnalyzer.analyze({
 				template,
 				transcript: transcript.fullText,
