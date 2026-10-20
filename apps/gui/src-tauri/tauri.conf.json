@@ -1,50 +1,55 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Listening Resume",
-  "version": "0.1.0",
-  "identifier": "com.listening-resume.app",
-  "build": {
-    "frontendDist": "../dist",
-    "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "pnpm vite dev",
-    "beforeBuildCommand": "pnpm vite build"
-  },
-  "app": {
-    "windows": [
-      {
-        "title": "Listening Resume",
-        "width": 1200,
-        "height": 800,
-        "resizable": true,
-        "fullscreen": false,
-        "minWidth": 900,
-        "minHeight": 600
-      }
-    ],
-    "security": {
-      "csp": null
-    }
-  },
-  "bundle": {
-    "active": true,
-    "targets": ["deb", "nsis", "msi"],
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "linux": {
-      "deb": {
-        "depends": ["ffmpeg", "pipewire"]
-      }
-    },
-    "windows": {
-      "nsis": {
-        "installMode": "currentUser"
-      }
-    },
-    "resources": ["resources/**/*"]
-  }
+	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+	"productName": "Listening Resume",
+	"version": "0.1.0",
+	"identifier": "com.listening-resume.app",
+	"build": {
+		"frontendDist": "../dist",
+		"devUrl": "http://localhost:1420",
+		"beforeDevCommand": "pnpm vite dev",
+		"beforeBuildCommand": "pnpm vite build"
+	},
+	"app": {
+		"windows": [
+			{
+				"title": "Listening Resume",
+				"width": 1200,
+				"height": 800,
+				"resizable": true,
+				"fullscreen": false,
+				"minWidth": 900,
+				"minHeight": 600
+			}
+		],
+		"security": {
+			"csp": null
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": ["deb", "nsis", "msi"],
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		],
+		"linux": {
+			"deb": {
+				"depends": ["ffmpeg", "pipewire"]
+			}
+		},
+		"windows": {
+			"nsis": {
+				"installMode": "currentUser"
+			}
+		},
+		"resources": ["resources/**/*"]
+	},
+	"plugins": {
+		"shell": {
+			"open": "(https?://|mailto:)[^\\s]+"
+		}
+	}
 }

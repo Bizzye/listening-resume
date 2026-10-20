@@ -8,6 +8,9 @@ repository = ""
 edition = "2021"
 rust-version = "1.77.2"
 default-run = "app"
+# Bins are declared explicitly. The Tauri bundler also scans src/bin/ by directory name, so the
+# wasapi-capture module directory must be named exactly like its bin (hyphen, not underscore).
+autobins = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -16,8 +19,12 @@ name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
+name = "app"
+path = "src/main.rs"
+
+[[bin]]
 name = "wasapi-capture"
-path = "src/bin/wasapi_capture.rs"
+path = "src/bin/wasapi-capture/main.rs"
 
 [build-dependencies]
 tauri-build = { version = "2.6.2", features = [] }
@@ -33,3 +40,11 @@ tauri-plugin-shell = "2"
 [target.'cfg(windows)'.dependencies]
 wasapi = "0.14"
 hound = "3.5"
+# Already in the dependency tree (via tauri); used for CloseHandle (wasapi-capture) and the
+# kill-on-close Job Object that ties the node server's process tree to the app (lib.rs).
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+] }

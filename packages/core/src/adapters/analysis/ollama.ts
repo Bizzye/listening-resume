@@ -1,56 +1,47 @@
 import { Ollama } from "ollama";
-import { AnalysisError } from "../../domain/errors.js";
-import type { AnalyzeOptions, AnalyzeResult, AnalyzerPort } from "../../ports/analyzer.js";
+import { DEFAULT_ANALYSIS_MODEL, DEFAULT_OLLAMA_HOST } from "../../constants.js";
+import { AnalysisError, errorMessage } from "../../domain/errors.js";
+import type { AnalyzeRequest, AnalyzeResult, AnalyzerPort } from "../../ports/analyzer.js";
+
+/**
+ * Ollama defaults num_ctx to ~2048, which silently truncates long lecture transcripts — the model
+ * would only "see" the first minutes. 8192 fits an ~40 min class AND keeps an 8B model fully on an
+ * 8 GB GPU (a bigger context spills to CPU and the analysis crawls). For long lectures, Groq
+ * (70B, 128k context) is the better primary (`config.analysis.provider = "groq"`).
+ * Low temperature keeps the output faithful to the transcript.
+ */
+export const OLLAMA_CHAT_OPTIONS = { num_ctx: 8192, num_predict: 4096, temperature: 0.3 } as const;
 
 export class OllamaAdapter implements AnalyzerPort {
-	private client: Ollama;
 	readonly provider = "ollama";
 	readonly model: string;
+	readonly host: string;
+	private readonly client: Ollama;
 
-	constructor(model = "llama3.1:8b", host = "http://127.0.0.1:11434") {
-		this.client = new Ollama({ host });
+	constructor(model = DEFAULT_ANALYSIS_MODEL, host = DEFAULT_OLLAMA_HOST) {
 		this.model = model;
+		this.host = host;
+		this.client = new Ollama({ host });
 	}
 
-	async analyze(options: AnalyzeOptions): Promise<AnalyzeResult> {
-		const userPrompt = options.template.userPromptTemplate.replace(
-			"{{transcript}}",
-			options.transcript,
-		);
-
-		const { ANALYSIS_SYSTEM_PROMPT } = await import("../../ports/analyzer.js");
-		const systemPrompt = options.extraPrompt
-			? `${ANALYSIS_SYSTEM_PROMPT}\n\nInstruções adicionais: ${options.extraPrompt}`
-			: ANALYSIS_SYSTEM_PROMPT;
-
+	async analyze(request: AnalyzeRequest): Promise<AnalyzeResult> {
+		const model = request.model ?? this.model;
 		try {
 			const response = await this.client.chat({
-				model: this.model,
+				model,
 				messages: [
-					{ role: "system", content: systemPrompt },
-					{ role: "user", content: userPrompt },
+					{ role: "system", content: request.systemPrompt },
+					{ role: "user", content: request.userPrompt },
 				],
-				options: {
-					// Ollama defaults num_ctx to ~2048, which silently truncates long
-					// lecture transcripts — the model would only "see" the first minutes.
-					// 8192 fits an ~40min class AND keeps the 8B model fully on an 8GB
-					// GPU (bigger spills to CPU and the analysis crawls). For long
-					// lectures, Groq (70B, 128k ctx) is the configured primary.
-					num_ctx: 8192,
-					num_predict: 4096,
-					temperature: 0.3,
-				},
+				options: { ...OLLAMA_CHAT_OPTIONS },
 			});
-
-			return {
-				content: response.message.content,
-				model: this.model,
-				provider: this.provider,
-				tokensUsed: response.eval_count,
-			};
+			const content = response.message.content.trim();
+			if (!content)
+				throw new AnalysisError("Ollama returned an empty response", { upstream: true });
+			return { content, model, provider: this.provider, tokensUsed: response.eval_count };
 		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : "Unknown error";
-			throw new AnalysisError(`Ollama analysis failed: ${message}`);
+			if (error instanceof AnalysisError) throw error;
+			throw new AnalysisError(`Ollama (${model}): ${errorMessage(error)}`, { upstream: true });
 		}
 	}
 
@@ -60,6 +51,16 @@ export class OllamaAdapter implements AnalyzerPort {
 			return true;
 		} catch {
 			return false;
+		}
+	}
+
+	/** Installed model names (empty when Ollama is offline). */
+	async listModels(): Promise<string[]> {
+		try {
+			const { models } = await this.client.list();
+			return models.map((m) => m.name).sort();
+		} catch {
+			return [];
 		}
 	}
 }

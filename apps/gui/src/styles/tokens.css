@@ -1,0 +1,45 @@
+/* Design tokens — ported verbatim from docs/design/Listening Resume.dc.html */
+body {
+	margin: 0;
+	background: #0b0c10;
+}
+a {
+	color: #7a6bff;
+}
+a:hover {
+	color: #9b8fff;
+}
+.lr {
+	--bg: #0b0c10;
+	--bg2: #101118;
+	--bg3: #161723;
+	--line: rgba(255, 255, 255, 0.07);
+	--line2: rgba(255, 255, 255, 0.13);
+	--tx: #eef0f6;
+	--tx2: #9a9db1;
+	--tx3: #5d6072;
+	--ac: #7a6bff;
+	--rad: 14px;
+	--red: #ff4d5e;
+	--grn: #3ecf8e;
+	--amb: #f2a83b;
+	--acs: color-mix(in oklab, var(--ac) 14%, transparent);
+	--sh: 0 12px 40px rgba(0, 0, 0, 0.4);
+	min-height: 100vh;
+	background: var(--bg);
+	color: var(--tx);
+	font-family: "Geist", system-ui, sans-serif;
+	font-size: 14px;
+	-webkit-font-smoothing: antialiased;
+}
+.light {
+	--bg: #f3f3f6;
+	--bg2: #ffffff;
+	--bg3: #fafafc;
+	--line: rgba(18, 19, 35, 0.08);
+	--line2: rgba(18, 19, 35, 0.16);
+	--tx: #15161e;
+	--tx2: #5c5f70;
+	--tx3: #9a9ca8;
+	--sh: 0 12px 32px rgba(20, 22, 40, 0.1);
+}

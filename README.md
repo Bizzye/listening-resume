@@ -2,230 +2,182 @@
 
 # 🎧 Listening Resume
 
-**Grave o que toca no seu PC → vire texto → vire resumo inteligente.**
+**Grave qualquer áudio do seu computador, transforme em texto e receba um resumo pronto.**
 
-Captura o áudio do sistema (reuniões, videoaulas, podcasts) — opcionalmente mixado com seu microfone —, transcreve automaticamente com Whisper e gera resumos com IA. Tudo num app desktop leve e **local-first**.
+Aulas, reuniões, podcasts e entrevistas viram anotações organizadas com um clique.
+
+[![Baixar para Windows](https://img.shields.io/badge/⬇%20Baixar%20para%20Windows-instalador%20.exe-7a6bff?style=for-the-badge)](https://github.com/Bizzye/listening-resume/releases/latest)
 
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows%20%7C%20Linux-2563eb)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-WASAPI-000000?logo=rust&logoColor=white)
-![Licença](https://img.shields.io/badge/licença-pessoal-lightgrey)
+![Testes](https://img.shields.io/badge/testes%20automatizados-660%2B-3ecf8e)
 
-![Dashboard](docs/images/01-dashboard.png)
+![Tela de gravação com a onda reagindo ao som de verdade](docs/images/19-real-gravacao-onda.png)
+
+<sub>Print tirado durante uma gravação real: as barras sobem quando há som e ficam baixas no silêncio.</sub>
 
 </div>
 
 ---
 
-## Por que existe
+## 💡 O que é
 
-Reuniões, aulas e podcasts passam e a informação se perde. Pedir a transcrição depois é trabalhoso, e ferramentas online exigem subir seu áudio pra nuvem. O **Listening Resume** resolve isso no seu próprio computador:
+O **Listening Resume** é um aplicativo para computador que funciona como um "gravador inteligente":
 
-- **Captura direto da placa de som** — não precisa de "Stereo Mix", cabo virtual ou plugin. No Windows usa um binário nativo **WASAPI loopback**; no Linux, PipeWire/PulseAudio.
-- **Seu áudio não vai pra lugar nenhum** — gravações, transcrições e análises ficam no seu disco. Só o texto vai pra API de IA que **você** escolher (ou roda 100% local com Ollama + whisper-cpp).
-- **Do áudio ao resumo em 3 cliques** — gravar → transcrever → analisar.
+1. **Grava** o som que está tocando no PC (uma videoaula, uma reunião no Meet/Teams, um podcast) junto com a sua voz no microfone.
+2. **Transcreve** tudo automaticamente, ou seja, transforma o áudio em texto, com o horário de cada fala.
+3. **Resume** o conteúdo com inteligência artificial, no formato que você escolher: resumo executivo, ata de reunião, caderno de aula, flashcards para estudar ou artigo.
+4. **Exporta** o resultado para Word, PDF ou Markdown.
 
----
+Tudo em português e com uma interface simples, pensada para quem não é da área de tecnologia.
 
-## ✨ Destaques
+## ✨ O que ele faz
 
 | | |
 |---|---|
-| 🎚️ **Áudio do sistema + microfone** | Grava a saída do PC e, opcionalmente, mixa seu mic — com **soft-limiter** pra não estourar |
-| 🔇 **Mute ao vivo** | Silencie sistema ou mic **durante** a gravação, sem afetar o que você ouve |
-| 🗣️ **Transcrição automática** | Whisper via Groq (rápido) ou whisper-cpp/OpenAI |
-| 🧠 **Análise com IA** | Resumos e notas via Ollama (local) com fallback automático pro Groq |
-| 🧩 **Templates personalizáveis** | Prompts prontos (reunião, videoaula) ou crie os seus com `{{transcript}}` |
-| ▶️ **Player com navegação** | Toque o áudio e pule clicando num trecho da transcrição ou na barra |
-| 📤 **Export** | Markdown ou texto, download ou salvo direto na pasta configurada |
-| 🪟 **Nativo e discreto** | App Tauri leve; no Windows o backend roda **sem janela de console** |
-| 💻 **GUI + CLI** | Use a interface ou rode headless pela linha de comando |
+| 🎙️ **Grava o PC e o microfone juntos** | Não precisa de cabo nem de programa extra: o app capta o som do computador direto do Windows |
+| 🌊 **Mostra o som ao vivo** | A onda na tela se mexe de acordo com o áudio real, então você vê na hora se está gravando |
+| 🔀 **Troca de fone ou microfone sem parar** | Plugou outro fone no meio da reunião? Troque na tela e a gravação continua |
+| 🖥️ **Opção "Padrão do sistema"** | Usa automaticamente o dispositivo que o Windows está usando, mesmo se ele mudar no meio do caminho |
+| 🔇 **Silenciar por fonte** | Desliga só o microfone ou só o som do PC da gravação, e avisa se nada estiver sendo captado |
+| 📝 **Transcrição com horário** | Clique em uma frase e o áudio pula para aquele momento |
+| 🧠 **Resumos prontos em pt-BR** | Modelos de Videoaula, Ata de Reunião, Resumo Executivo, Flashcards (Anki) e Podcast → Artigo, além dos que você criar |
+| 📤 **Exporta para Word, PDF e Markdown** | Salva na pasta que você escolher |
+| 📥 **Importa arquivos** | Também transcreve áudios e vídeos que você já tem |
+| 🌗 **Tema claro e escuro** | |
+
+## 🧭 Conhecendo o app
+
+| Primeiro uso: o app testa o seu som | Painel inicial |
+|---|---|
+| ![Teste de áudio no primeiro uso](docs/images/02-onboarding-teste-audio.png) | ![Painel inicial](docs/images/04-dashboard.png) |
+
+| Gravando | Trocando o microfone sem parar a gravação |
+|---|---|
+| ![Gravando](docs/images/05-gravacao.png) | ![Troca de microfone ao vivo](docs/images/06-gravacao-dispositivos.png) |
+
+| Lista de gravações | Transcrição com player |
+|---|---|
+| ![Lista de gravações](docs/images/08-sessoes.png) | ![Transcrição](docs/images/10-detalhe-transcricao.png) |
+
+| Resumo gerado pela IA | Flashcards para estudar |
+|---|---|
+| ![Resumo](docs/images/11-detalhe-analise.png) | ![Flashcards](docs/images/12-detalhe-flashcards.png) |
+
+| Exportar | Modelos de resumo |
+|---|---|
+| ![Exportar](docs/images/13-detalhe-export.png) | ![Modelos](docs/images/14-templates.png) |
+
+| Configurações | Tema claro |
+|---|---|
+| ![Configurações](docs/images/16-configuracoes.png) | ![Tema claro](docs/images/17-tema-claro.png) |
+
+## ⬇️ Como instalar (Windows)
+
+1. Abra a página de [**Downloads**](https://github.com/Bizzye/listening-resume/releases/latest) e baixe o arquivo `LR-…-setup.exe`.
+2. Dê dois cliques no arquivo baixado e siga o instalador (Avançar → Instalar).
+3. Abra o **Listening Resume** pelo menu Iniciar. Na primeira vez, ele mostra um passo a passo rápido.
+
+> **O Windows mostrou "O Windows protegeu o computador"?** Isso acontece com programas novos que ainda não têm assinatura digital paga. Clique em **Mais informações → Executar assim mesmo**.
+
+**Para transcrever e resumir**, o app precisa de um serviço de inteligência artificial. O jeito mais fácil:
+
+- Crie uma chave gratuita em [console.groq.com](https://console.groq.com/keys) e cole em **Configurações → Chave de API (Groq)**.
+- Opcional, para funcionar sem internet: instale o [Ollama](https://ollama.com) (resumos) e o whisper.cpp (transcrição).
+
+A gravação funciona mesmo sem nenhuma chave configurada.
+
+## 🗓️ Como o projeto foi construído
+
+O desenvolvimento foi organizado em sprints curtas, cada uma com um objetivo claro:
+
+| Sprint | Objetivo | Resultado |
+|---|---|---|
+| **1. Fundação** | Primeira versão funcional | Gravação, transcrição e resumo funcionando, ainda com interface simples |
+| **2. Windows de verdade** | Gravar o som do PC sem programas extras | Motor de captura próprio para Windows, mistura do microfone sem distorção, instalador |
+| **3. Novo design** | Uma interface bonita e fácil | Design completo criado e importado como referência visual (todas as telas, modo claro e escuro) |
+| **4. Reconstrução** | Reescrever o app para seguir o design e ficar fácil de manter | Interface nova idêntica ao design, onda que reage ao som real, troca de dispositivos ao vivo, opção "Padrão do sistema", código reorganizado em partes independentes |
+| **5. Revisão e segurança** | Encontrar problemas antes do usuário | Quatro revisões completas de código; mais de 80 problemas encontrados e corrigidos, incluindo duas falhas de segurança graves |
+| **6. Testes** | Garantir que tudo funciona e continua funcionando | Mais de 660 testes automáticos, incluindo testes que usam o app como uma pessoa usaria e um teste no hardware real |
+| **7. Entrega** | Deixar pronto para qualquer pessoa usar | Instalador para Windows, documentação, prints de todas as telas e verificação automática a cada mudança (CI) |
+
+## ✅ Qualidade em números
+
+- **660+ testes automáticos** em três camadas: 545 testes de unidade, 85 de integração e 29 de ponta a ponta (o robô abre o app, grava, transcreve, resume e exporta).
+- **Teste em hardware real**: a duração gravada bateu com o relógio com diferença de até **0,05 segundo**.
+- **Segurança**: o app só aceita conexões do próprio computador e bloqueia sites que tentem controlá-lo.
+- **Privacidade**: gravações, textos e resumos ficam salvos **no seu computador**. Só vai para a internet o que for enviado ao serviço de IA que você escolher.
 
 ---
 
-## 🔄 Como funciona
+## 🛠️ Para desenvolvedores
 
-```mermaid
-flowchart LR
-    A["🎧 Áudio do sistema<br/>+ 🎤 microfone (opcional)"] --> B["💾 Gravação<br/>chunks WAV"]
-    B --> C["📝 Transcrição<br/>Groq Whisper"]
-    C --> D["🧠 Análise<br/>Ollama → Groq"]
-    D --> E["📤 Export<br/>Markdown / texto"]
-```
+<details>
+<summary>Stack, arquitetura, comandos e estrutura</summary>
 
-Cada gravação é uma **sessão**, que avança por uma máquina de estados:
+### Stack
 
-```mermaid
-stateDiagram-v2
-    [*] --> created
-    created --> recording
-    recording --> stopped
-    stopped --> transcribing
-    transcribing --> transcribed
-    transcribed --> analyzing
-    analyzing --> completed
-    completed --> analyzing: re-analisar
-    transcribing --> failed
-    analyzing --> failed
-```
+Tauri 2 (desktop) · React 19 + Zustand + Vite 6 (interface) · Node.js (API local) · Rust (captura WASAPI) · SQLite + Drizzle · Zod · Vitest · Playwright · Biome.
 
----
+Arquitetura hexagonal (ports & adapters) no `packages/core`, servidor HTTP modular com injeção de dependências, binário de captura em Rust com um núcleo puro testado (DSP, protocolo, máquina de estados).
 
-## 🧭 Passo a passo (interface)
-
-### 1. Dashboard — visão geral
-Total de sessões, tempo gravado, quantas foram transcritas/analisadas e as gravações recentes. **New Recording** (ou o microfone na lateral) começa uma gravação.
-
-![Dashboard](docs/images/01-dashboard.png)
-
-### 2. Settings — configurar antes de gravar
-- **Recording Device** — qual saída capturar (loopback do sistema). **Test Sound** toca um tom *no dispositivo selecionado* pra confirmar.
-- **Microphone (opcional)** — se escolhido, é **mixado** com o áudio do sistema.
-- **Groq API Key** — cole sua chave (`gsk_...`) → **Salvar**. Usada na transcrição e como fallback de análise.
-- **Analysis** — provider/modelo (Ollama local ou Groq) e templates.
-- **Export Directory** — pasta de saída dos arquivos exportados.
-
-![Settings](docs/images/04-settings.png)
-
-### 3. Gravar
-Forma de onda animada, cronômetro e o dispositivo em uso. Botões: 🔊 mute do sistema · ⏹️ parar · 🎤 mute do mic. O mute vale **só pra gravação**.
-
-![Gravação em andamento](docs/images/02-recording.png)
-
-### 4. Sessions — suas gravações
-Lista com status, duração e dispositivo, com busca. Clique para abrir o detalhe.
-
-![Lista de sessões](docs/images/06-sessions.png)
-
-### 5. Detalhe — transcrever, analisar, exportar
-Player com seek + três abas:
-- **Transcript** — gera a transcrição; cada trecho tem timestamp clicável que pula o áudio.
-- **Analysis** — escolhe um template e gera o resumo (Ollama → fallback Groq); pode rodar de novo.
-- **Export** — Markdown/texto, download ou salvar na pasta de export.
-
-![Detalhe da sessão](docs/images/07-session-detail.png)
-
-### 6. Templates — personalizar a análise
-Dois prontos (**Resumo de Reunião**, **Notas de Videoaula**) e os seus — basta o prompt conter `{{transcript}}`, substituído pela transcrição na hora.
-
-![Templates](docs/images/05-templates.png)
-
----
-
-## 📦 Instalação
-
-### Usuário final
-
-| SO | Como |
-|----|------|
-| **Windows** | Baixe e rode o instalador `Listening Resume_x.y.z_x64-setup.exe`. FFmpeg, FFplay e Node já vêm embutidos — sem configurar nada de áudio. |
-| **Linux** | Instale o `.deb` (`sudo dpkg -i ...`). Requer `ffmpeg` e PipeWire/PulseAudio no sistema. |
-
-### A partir do código
-
-```bash
-pnpm install        # dependências
-pnpm dev            # GUI em desenvolvimento (Vite :1420 + API :3456)
-```
-
-Build dos instaladores (rode no SO alvo):
-
-```bash
-pnpm --filter gui build:windows   # → .exe (NSIS) em apps/gui/src-tauri/target/release/bundle/nsis/
-pnpm --filter gui build:linux     # → .deb em .../bundle/deb/
-```
-
-> O build do Windows valida a si mesmo: um *smoke-test* sobe o servidor empacotado e checa `GET /api/devices` antes de gerar o instalador — se o bundle quebrar, o build falha.
-
----
-
-## ⚙️ Configuração de IA
-
-Pelo menos um provider. Configure pela tela **Settings** ou via `.env` na raiz:
-
-```bash
-cp .env.example .env
-```
-
-```env
-GROQ_API_KEY=gsk_...
-```
+### IA
 
 | Provider | Uso | Como |
-|----------|-----|------|
-| **Groq** ⭐ | Transcrição + Análise | `GROQ_API_KEY` (rápido, recomendado) |
-| **Ollama** | Análise local | `ollama serve` + modelo (ex.: `llama3.1:8b`) |
-| **whisper-cpp** | Transcrição local | binário local |
-| **OpenAI** | Transcrição + Análise | `OPENAI_API_KEY` |
-| **Anthropic** | Análise | `ANTHROPIC_API_KEY` |
+|---|---|---|
+| **Groq** | Transcrição (Whisper) + fallback da análise | Chave `gsk_...` em Configurações (ou `GROQ_API_KEY` no `.env`) |
+| **Ollama** | Análise local (primário) | `ollama serve` + um modelo, por exemplo `ollama pull llama3.1:8b` |
+| **whisper.cpp** | Transcrição local | `whisper-cli` no PATH + `ggml-<modelo>.bin` em `<dados>/models` |
 
-> 💡 Combinação 100% offline: **Ollama** (análise) + **whisper-cpp** (transcrição) — nenhum dado sai do PC.
+### Rodando localmente
 
----
+Requer Node 22+, pnpm 12, Rust stable e, no Windows, PowerShell 7.
 
-## 🏗️ Arquitetura
-
-Monorepo pnpm com **arquitetura hexagonal** (ports & adapters) no core — a lógica de negócio não conhece detalhes de plataforma, só interfaces.
-
-```
-listening-resume/
-├── packages/core/          # @listening-resume/core — lógica pura
-│   ├── domain/             #   modelos, estados, erros
-│   ├── ports/              #   interfaces (AudioCapture, Transcriber, Analyzer, ...)
-│   ├── adapters/           #   implementações por plataforma/provider
-│   │   ├── audio/          #     WASAPI (Windows) · PipeWire/Pulse (Linux)
-│   │   ├── transcription/  #     Groq Whisper · whisper-cpp
-│   │   ├── analysis/       #     Ollama · Groq
-│   │   └── persistence/    #     SQLite (Drizzle) · arquivos · export Markdown
-│   └── application/        #   serviços (Recording, Transcription, Analysis)
-├── apps/gui/               # Desktop: React 19 + Vite 6 + servidor Node + Tauri 2
-│   └── src-tauri/          #   wrapper Rust + binário nativo de captura WASAPI
-└── apps/cli/               # CLI (Commander.js)
+```bash
+pnpm install
+pnpm --filter @listening-resume/core build   # a GUI e a CLI consomem o core via dist/
+pnpm --filter gui build:wasapi               # Windows: compila o wasapi-capture.exe
+pnpm dev                                     # Vite :1420 + API :3456
+pnpm listen devices                          # CLI (lista dispositivos)
 ```
 
-No Windows, a captura de áudio é um binário **Rust/WASAPI** dedicado (`wasapi-capture`): grava o loopback no formato nativo do device, mixa o microfone (resample + soft-limiter), aceita comandos de mute em tempo real e ainda renderiza o tom de "Test Sound" no dispositivo escolhido.
+| Comando | O que faz |
+|---|---|
+| `pnpm test` | Todas as camadas: unit + integração + e2e |
+| `pnpm test:unit` | core + GUI (UI e servidor) + Rust (`cargo test --bin wasapi-capture`) |
+| `pnpm test:integration` | core + servidor HTTP real em porta efêmera |
+| `pnpm test:e2e` | CLI + Playwright (backend fake hermético) |
+| `pnpm test:hardware` | Playwright com captura **real** (toca bipes na saída padrão) |
+| `pnpm screenshots` | Regenera `docs/images/01–18` |
+| `pnpm lint` / `pnpm format` | Biome |
+| `pnpm --filter gui build:windows` | Instalador NSIS/MSI, copiado para `exe/LR-<data>-<versão>-setup.exe` |
+| `pnpm --filter gui build:linux` | Pacote `.deb` |
 
----
+### Estrutura
 
-## 🧱 Stack
+```
+packages/core/      @listening-resume/core: hexagonal (domain · ports · adapters · application · config · templates · utils)
+                    + @listening-resume/core/shared (entrada segura para o browser)
+apps/gui/
+├── src/            React 19 + Zustand (app · features · shared · store · styles)
+├── server.ts       entrada da API → server/ (app, http guard, router, routes, services, bootstrap)
+├── src-tauri/      Tauri 2 (lib.rs) + src/bin/wasapi-capture/ (captura WASAPI em Rust)
+├── e2e/            Playwright
+└── tests/          ui · server/unit · server/integration
+apps/cli/           CLI (Commander)
+docs/images/        prints de todas as telas (gerados por `pnpm screenshots`)
+```
 
-| Camada | Tecnologia |
-|--------|-----------|
-| Frontend | React 19 · Tailwind CSS · Zustand · Vite 6 |
-| Desktop | Tauri 2 (Rust) |
-| Backend | Node.js (servidor HTTP embarcado, porta 3456) |
-| Captura (Win) | Rust + crate `wasapi` (loopback nativo) |
-| Captura (Linux) | FFmpeg + PipeWire/PulseAudio |
-| Banco | SQLite (better-sqlite3 + Drizzle ORM) |
-| Transcrição | Whisper (Groq / OpenAI / whisper-cpp) |
-| Análise | LLMs (Ollama / Groq / OpenAI / Anthropic) |
-| Lint/Format | Biome · TypeScript strict |
+### Dados e privacidade
 
----
+- Áudio, transcrições e análises ficam em `%LOCALAPPDATA%\listening-resume` (Windows) ou `~/.local/share/listening-resume` (Linux).
+- A API escuta **só em loopback**, com guard de Host, Origin e Fetch-Metadata.
+- Só o áudio de transcrição (no caso do Groq) e o texto da análise vão para o provider que **você** configurar.
 
-## 🔐 Privacidade
-
-- **Local-first**: áudio, transcrições e análises ficam em `%LOCALAPPDATA%\listening-resume` (Windows) ou `~/.local/share/listening-resume` (Linux).
-- O servidor HTTP escuta **só em localhost** e tem guarda de origem.
-- Áudio **nunca** é enviado para a nuvem — apenas o **texto** vai para o provider de IA que você configurar (e nada sai se usar Ollama + whisper-cpp).
-
----
-
-## 🛠️ Comandos úteis
-
-| Comando | Descrição |
-|---------|-----------|
-| `pnpm dev` | GUI em desenvolvimento |
-| `pnpm build` | Build de todos os pacotes |
-| `pnpm test` | Testes (unit + integração + e2e) |
-| `pnpm lint` | Biome em todo o monorepo |
-| `pnpm listen` | CLI: inicia gravação |
-| `pnpm --filter gui build:windows` | Instalador `.exe` (Windows) |
-| `pnpm --filter gui build:linux` | Pacote `.deb` (Linux) |
-
----
+</details>
 
 ## 📄 Licença
 

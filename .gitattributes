@@ -1,0 +1,10 @@
+# Keep LF in the repo and in every checkout (Biome enforces LF; Windows runners default to CRLF).
+* text=auto eol=lf
+
+# PowerShell scripts run fine with LF; binaries must never be converted.
+*.png binary
+*.ico binary
+*.icns binary
+*.exe binary
+*.msi binary
+*.wav binary

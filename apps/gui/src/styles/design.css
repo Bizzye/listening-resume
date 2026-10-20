@@ -1,0 +1,1397 @@
+/* Component styles — ported verbatim from docs/design/Listening Resume.dc.html */
+.mono {
+	font-family: "Geist Mono", ui-monospace, monospace;
+	font-variant-numeric: tabular-nums;
+}
+.card {
+	background: var(--bg2);
+	border: 1px solid var(--line);
+	border-radius: var(--rad);
+}
+.btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 16px;
+	border-radius: calc(var(--rad) - 4px);
+	background: var(--ac);
+	color: #fff;
+	font:
+		600 13px "Geist",
+		sans-serif;
+	border: none;
+	cursor: pointer;
+	transition: all 0.16s;
+	box-shadow: 0 4px 18px color-mix(in oklab, var(--ac) 30%, transparent);
+	white-space: nowrap;
+}
+.btn:hover {
+	filter: brightness(1.1);
+	transform: translateY(-1px);
+}
+.btn2 {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 16px;
+	border-radius: calc(var(--rad) - 4px);
+	background: var(--bg3);
+	color: var(--tx);
+	font:
+		600 13px "Geist",
+		sans-serif;
+	border: 1px solid var(--line2);
+	cursor: pointer;
+	transition: all 0.16s;
+	white-space: nowrap;
+}
+.btn2:hover {
+	border-color: var(--tx3);
+}
+.ghost {
+	background: none;
+	border: none;
+	color: var(--tx2);
+	cursor: pointer;
+	font:
+		500 13px "Geist",
+		sans-serif;
+	padding: 7px 10px;
+	border-radius: 9px;
+	transition: all 0.15s;
+	white-space: nowrap;
+}
+.ghost:hover {
+	color: var(--tx);
+	background: color-mix(in oklab, var(--tx) 6%, transparent);
+}
+.bdg {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 9px;
+	border-radius: 99px;
+	font:
+		600 11px "Geist",
+		sans-serif;
+	white-space: nowrap;
+}
+.st-ok {
+	background: color-mix(in oklab, var(--grn) 13%, transparent);
+	color: var(--grn);
+}
+.st-ac {
+	background: var(--acs);
+	color: var(--ac);
+}
+.st-err {
+	background: color-mix(in oklab, var(--red) 13%, transparent);
+	color: var(--red);
+}
+.st-n {
+	background: color-mix(in oklab, var(--tx) 8%, transparent);
+	color: var(--tx2);
+}
+.dt {
+	width: 6px;
+	height: 6px;
+	border-radius: 99px;
+	background: currentColor;
+	flex: none;
+}
+.pulse {
+	animation: pl 1.3s ease-in-out infinite;
+}
+@keyframes pl {
+	50% {
+		opacity: 0.2;
+	}
+}
+.h1 {
+	margin: 0;
+	font:
+		600 21px / 1.25 "Geist",
+		sans-serif;
+	letter-spacing: -0.01em;
+}
+.h2 {
+	margin: 0;
+	font:
+		600 15px "Geist",
+		sans-serif;
+}
+.sub {
+	margin: 4px 0 0;
+	font:
+		400 13px / 1.5 "Geist",
+		sans-serif;
+	color: var(--tx2);
+}
+.app {
+	display: flex;
+	height: 100vh;
+	overflow: hidden;
+}
+.side {
+	width: 234px;
+	flex: none;
+	background: var(--bg2);
+	border-right: 1px solid var(--line);
+	display: flex;
+	flex-direction: column;
+	padding: 16px 12px;
+	gap: 2px;
+	box-sizing: border-box;
+}
+.lrow {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 10px 16px;
+}
+.lmark {
+	width: 30px;
+	height: 30px;
+	border-radius: 9px;
+	background: radial-gradient(
+		120% 120% at 20% 0%,
+		color-mix(in oklab, var(--ac) 70%, #fff) 0%,
+		var(--ac) 42%,
+		color-mix(in oklab, var(--ac) 62%, #12081f) 100%
+	);
+	color: #fff;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 2.5px;
+	flex: none;
+	position: relative;
+	overflow: hidden;
+	border: 1px solid color-mix(in oklab, var(--ac) 55%, #fff);
+	box-shadow:
+		0 4px 14px color-mix(in oklab, var(--ac) 45%, transparent),
+		inset 0 1px 0 rgba(255, 255, 255, 0.4),
+		inset 0 -8px 14px rgba(10, 4, 26, 0.35);
+}
+.lmark::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: radial-gradient(90% 55% at 50% -18%, rgba(255, 255, 255, 0.42), transparent 65%);
+}
+.lmark::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 130%;
+	height: 130%;
+	transform: translate(-50%, -50%);
+	border-radius: 99px;
+	border: 1.5px solid rgba(255, 255, 255, 0.16);
+	pointer-events: none;
+}
+.lb {
+	width: 3px;
+	border-radius: 2px;
+	background: linear-gradient(180deg, #fff, rgba(255, 255, 255, 0.72));
+	box-shadow: 0 1px 2px rgba(10, 4, 26, 0.35);
+	position: relative;
+	z-index: 1;
+}
+.lname {
+	font:
+		600 13.5px "Geist",
+		sans-serif;
+	letter-spacing: -0.01em;
+}
+.lsub {
+	font:
+		500 10px "Geist Mono",
+		monospace;
+	color: var(--tx3);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+.navi {
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	padding: 9px 12px;
+	border-radius: 10px;
+	color: var(--tx2);
+	font:
+		500 13px "Geist",
+		sans-serif;
+	cursor: pointer;
+	border: none;
+	background: none;
+	width: 100%;
+	text-align: left;
+	transition: all 0.14s;
+}
+.navi:hover {
+	color: var(--tx);
+	background: color-mix(in oklab, var(--tx) 5%, transparent);
+}
+.navi.on {
+	color: var(--tx);
+	background: var(--acs);
+}
+.navi.on .nvic {
+	color: var(--ac);
+}
+/* biome-ignore lint/style/noDescendingSpecificity: rule order kept verbatim from the design */
+.nvic {
+	color: var(--tx3);
+	flex: none;
+	transition: color 0.14s;
+}
+.recbtn {
+	margin: 12px 2px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 9px;
+	padding: 11px;
+	border-radius: 11px;
+	border: 1px solid color-mix(in oklab, var(--red) 35%, transparent);
+	background: color-mix(in oklab, var(--red) 9%, transparent);
+	color: var(--red);
+	font:
+		600 13px "Geist",
+		sans-serif;
+	cursor: pointer;
+	transition: all 0.16s;
+}
+.recbtn:hover {
+	background: color-mix(in oklab, var(--red) 16%, transparent);
+}
+.recdot {
+	width: 8px;
+	height: 8px;
+	border-radius: 99px;
+	background: var(--red);
+	animation: pl 1.3s infinite;
+	flex: none;
+}
+.recdot.big {
+	width: 10px;
+	height: 10px;
+	box-shadow: 0 0 0 4px color-mix(in oklab, var(--red) 22%, transparent);
+}
+.sfoot {
+	margin-top: auto;
+	padding: 12px 6px 2px;
+	border-top: 1px solid var(--line);
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.srow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font:
+		500 12px "Geist",
+		sans-serif;
+	color: var(--tx2);
+	padding: 0 6px;
+}
+.sw {
+	width: 36px;
+	height: 21px;
+	border-radius: 99px;
+	background: var(--line2);
+	position: relative;
+	cursor: pointer;
+	border: none;
+	transition: background 0.2s;
+	flex: none;
+	padding: 0;
+}
+.sw.on {
+	background: var(--ac);
+}
+.sw-k {
+	position: absolute;
+	top: 2.5px;
+	left: 3px;
+	width: 16px;
+	height: 16px;
+	border-radius: 99px;
+	background: #fff;
+	transition: left 0.2s;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.sw.on .sw-k {
+	left: 17px;
+}
+.main {
+	flex: 1;
+	overflow-y: auto;
+	position: relative;
+}
+.pg {
+	max-width: 1020px;
+	margin: 0 auto;
+	padding: 32px 40px 70px;
+	animation: pin 0.3s ease;
+	box-sizing: border-box;
+}
+@keyframes pin {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+}
+.stats {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 12px;
+	margin-top: 20px;
+}
+.stat {
+	padding: 16px 18px;
+}
+.stat-n {
+	font:
+		600 24px / 1.1 "Geist Mono",
+		monospace;
+	letter-spacing: -0.02em;
+}
+.stat-l {
+	font:
+		500 11.5px "Geist",
+		sans-serif;
+	color: var(--tx2);
+	margin-top: 6px;
+}
+.sess {
+	padding: 15px 18px;
+	cursor: pointer;
+	transition: all 0.16s;
+}
+.sess:hover {
+	border-color: var(--line2);
+	transform: translateY(-1px);
+	box-shadow: var(--sh);
+}
+.s-t {
+	font:
+		600 13.5px "Geist",
+		sans-serif;
+	letter-spacing: -0.005em;
+}
+.s-m {
+	font:
+		400 12px "Geist",
+		sans-serif;
+	color: var(--tx3);
+	margin-top: 3px;
+}
+.s-p {
+	font:
+		400 12.5px / 1.5 "Geist",
+		sans-serif;
+	color: var(--tx2);
+	margin: 8px 0 0;
+	display: -webkit-box;
+	-webkit-line-clamp: 1;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.grid2 {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+}
+.inp {
+	background: var(--bg2);
+	border: 1px solid var(--line2);
+	border-radius: 10px;
+	padding: 9px 13px;
+	color: var(--tx);
+	font:
+		500 13px "Geist",
+		sans-serif;
+	outline: none;
+	transition: border 0.15s;
+	min-width: 0;
+	box-sizing: border-box;
+}
+.inp:focus {
+	border-color: var(--ac);
+}
+.inp::placeholder {
+	color: var(--tx3);
+}
+.chip {
+	padding: 6px 12px;
+	border-radius: 99px;
+	border: 1px solid var(--line2);
+	background: none;
+	color: var(--tx2);
+	font:
+		500 12px "Geist",
+		sans-serif;
+	cursor: pointer;
+	transition: all 0.14s;
+}
+.chip:hover {
+	color: var(--tx);
+	border-color: var(--tx3);
+}
+.chip.on {
+	background: var(--acs);
+	border-color: color-mix(in oklab, var(--ac) 45%, transparent);
+	color: var(--ac);
+}
+.empty {
+	border: 1.5px dashed var(--line2);
+	border-radius: var(--rad);
+	padding: 48px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	text-align: center;
+	color: var(--tx2);
+}
+.tabs {
+	display: flex;
+	gap: 2px;
+	border-bottom: 1px solid var(--line);
+	margin: 22px 0 20px;
+}
+.tabb {
+	padding: 9px 14px 11px;
+	font:
+		600 13px "Geist",
+		sans-serif;
+	color: var(--tx2);
+	border: none;
+	background: none;
+	cursor: pointer;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -1px;
+	transition: color 0.14s;
+}
+.tabb:hover {
+	color: var(--tx);
+}
+.tabb.on {
+	color: var(--tx);
+	border-color: var(--ac);
+}
+.player {
+	padding: 12px 16px;
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	position: sticky;
+	top: 12px;
+	z-index: 6;
+	background: color-mix(in oklab, var(--bg2) 86%, transparent);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--sh);
+}
+.pbtn {
+	width: 36px;
+	height: 36px;
+	border-radius: 99px;
+	background: var(--ac);
+	color: #fff;
+	border: none;
+	cursor: pointer;
+	display: grid;
+	place-items: center;
+	flex: none;
+	transition: all 0.15s;
+}
+.pbtn:hover {
+	filter: brightness(1.1);
+}
+.scrub {
+	flex: 1;
+	height: 20px;
+	display: flex;
+	align-items: center;
+	cursor: pointer;
+}
+.scrub-t {
+	width: 100%;
+	height: 5px;
+	border-radius: 99px;
+	background: var(--line2);
+	position: relative;
+}
+.scrub-f {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	border-radius: 99px;
+	background: var(--ac);
+}
+.scrub-f::after {
+	content: "";
+	position: absolute;
+	right: -6px;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 12px;
+	height: 12px;
+	border-radius: 99px;
+	background: #fff;
+	box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+}
+.ptime {
+	font:
+		500 11.5px "Geist Mono",
+		monospace;
+	color: var(--tx2);
+	flex: none;
+	font-variant-numeric: tabular-nums;
+}
+.seg {
+	display: flex;
+	gap: 14px;
+	padding: 11px 14px;
+	border-radius: 11px;
+	cursor: pointer;
+	transition: all 0.13s;
+}
+.seg:hover {
+	background: color-mix(in oklab, var(--tx) 4%, transparent);
+}
+.seg.on {
+	background: var(--acs);
+}
+.seg.on .seg-t {
+	color: var(--ac);
+}
+.seg.hit {
+	background: color-mix(in oklab, var(--amb) 9%, transparent);
+}
+.seg.dim {
+	opacity: 0.32;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: rule order kept verbatim from the design */
+.seg-t {
+	font:
+		600 11px "Geist Mono",
+		monospace;
+	color: var(--tx3);
+	padding-top: 3.5px;
+	flex: none;
+	width: 44px;
+	transition: color 0.13s;
+}
+.seg-x {
+	margin: 0;
+	font:
+		400 13.5px / 1.65 "Geist",
+		sans-serif;
+}
+.sk {
+	border-radius: 7px;
+	background: linear-gradient(90deg, var(--line) 25%, var(--line2) 50%, var(--line) 75%);
+	background-size: 200% 100%;
+	animation: skm 1.4s infinite;
+}
+@keyframes skm {
+	from {
+		background-position: 200% 0;
+	}
+	to {
+		background-position: -200% 0;
+	}
+}
+.prog {
+	height: 6px;
+	border-radius: 99px;
+	background: var(--line);
+	overflow: hidden;
+}
+.prog-f {
+	height: 100%;
+	border-radius: 99px;
+	background: var(--ac);
+	animation: pf 2.4s ease-in-out infinite alternate;
+}
+@keyframes pf {
+	from {
+		width: 18%;
+	}
+	to {
+		width: 72%;
+	}
+}
+.spin {
+	width: 15px;
+	height: 15px;
+	border-radius: 99px;
+	border: 2px solid var(--acs);
+	border-top-color: var(--ac);
+	animation: rot 0.7s linear infinite;
+	flex: none;
+	box-sizing: border-box;
+}
+@keyframes rot {
+	to {
+		transform: rotate(360deg);
+	}
+}
+.an-sec {
+	margin-top: 28px;
+}
+.an-h {
+	margin: 0 0 12px;
+	font:
+		600 11.5px "Geist",
+		sans-serif;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--tx2);
+}
+.kc {
+	padding: 14px 16px;
+}
+.kc b {
+	font:
+		600 13px "Geist",
+		sans-serif;
+}
+.kc p {
+	margin: 6px 0 0;
+	font:
+		400 12.5px / 1.55 "Geist",
+		sans-serif;
+	color: var(--tx2);
+}
+.fml {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	padding: 13px 16px;
+	background: var(--bg2);
+	border: 1px solid var(--line);
+	border-radius: 11px;
+}
+.fml-x {
+	font:
+		500 15px "Geist Mono",
+		monospace;
+}
+.fml-l {
+	font:
+		500 10.5px "Geist",
+		sans-serif;
+	color: var(--tx3);
+}
+.an-ol {
+	margin: 0;
+	padding-left: 20px;
+	font:
+		400 13.5px / 2 "Geist",
+		sans-serif;
+}
+.fc {
+	perspective: 800px;
+	height: 118px;
+	cursor: pointer;
+}
+.fc-in {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	transition: transform 0.5s cubic-bezier(0.3, 0.8, 0.3, 1);
+	transform-style: preserve-3d;
+}
+.fc.on .fc-in {
+	transform: rotateY(180deg);
+}
+.fc-f,
+.fc-b {
+	position: absolute;
+	inset: 0;
+	backface-visibility: hidden;
+	-webkit-backface-visibility: hidden;
+	border-radius: 12px;
+	padding: 14px 18px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	font:
+		500 13px / 1.5 "Geist",
+		sans-serif;
+	box-sizing: border-box;
+}
+.fc-f {
+	background: var(--bg2);
+	border: 1px solid var(--line2);
+}
+.fc-b {
+	background: var(--acs);
+	border: 1px solid color-mix(in oklab, var(--ac) 40%, transparent);
+	transform: rotateY(180deg);
+}
+.gl {
+	display: flex;
+	gap: 14px;
+	padding: 10px 0;
+	border-bottom: 1px solid var(--line);
+	font:
+		400 13px / 1.55 "Geist",
+		sans-serif;
+}
+.gl b {
+	width: 170px;
+	flex: none;
+	font-weight: 600;
+}
+.gl span {
+	color: var(--tx2);
+}
+.hint {
+	font:
+		400 12px "Geist",
+		sans-serif;
+	color: var(--tx3);
+}
+.exp {
+	padding: 18px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	align-items: flex-start;
+	transition: all 0.16s;
+}
+.exp:hover {
+	border-color: var(--line2);
+	box-shadow: var(--sh);
+	transform: translateY(-1px);
+}
+.exp-mk {
+	width: 38px;
+	height: 38px;
+	border-radius: 10px;
+	display: grid;
+	place-items: center;
+	font:
+		700 10.5px "Geist Mono",
+		monospace;
+	background: var(--acs);
+	color: var(--ac);
+}
+.tpl {
+	padding: 18px;
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+	cursor: pointer;
+	transition: all 0.16s;
+}
+.tpl:hover {
+	border-color: var(--line2);
+	transform: translateY(-1px);
+	box-shadow: var(--sh);
+}
+.tpl-p {
+	font:
+		400 11px / 1.5 "Geist Mono",
+		monospace;
+	color: var(--tx3);
+	background: color-mix(in oklab, var(--tx) 4%, transparent);
+	border-radius: 8px;
+	padding: 8px 10px;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.newt {
+	border: 1.5px dashed var(--line2);
+	background: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--tx2);
+	font:
+		500 13px "Geist",
+		sans-serif;
+	cursor: pointer;
+	border-radius: var(--rad);
+	min-height: 150px;
+	transition: all 0.15s;
+}
+.newt:hover {
+	color: var(--ac);
+	border-color: color-mix(in oklab, var(--ac) 50%, transparent);
+}
+.set-sec {
+	padding: 6px 20px 8px;
+	margin-top: 14px;
+}
+.set-h {
+	font:
+		600 13.5px "Geist",
+		sans-serif;
+	padding: 14px 0 4px;
+}
+.set-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 20px;
+	padding: 13px 0;
+	border-bottom: 1px solid var(--line);
+}
+.set-row.last {
+	border-bottom: none;
+}
+.set-l {
+	font:
+		500 13px "Geist",
+		sans-serif;
+}
+.set-d {
+	font:
+		400 12px "Geist",
+		sans-serif;
+	color: var(--tx3);
+	margin-top: 2px;
+}
+.mode {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 16px;
+	border-radius: 12px;
+	border: 1px solid var(--line2);
+	cursor: pointer;
+	text-align: left;
+	transition: all 0.15s;
+	font-family: "Geist", sans-serif;
+	color: var(--tx);
+	background: transparent;
+}
+.mode:hover {
+	border-color: var(--tx3);
+}
+.mode.on {
+	border-color: var(--ac);
+	background: var(--acs);
+	box-shadow: 0 0 0 1px var(--ac);
+}
+.mode b {
+	font:
+		600 13.5px "Geist",
+		sans-serif;
+}
+.mode p {
+	margin: 0;
+	font:
+		400 12.5px / 1.5 "Geist",
+		sans-serif;
+	color: var(--tx2);
+}
+.mode-m {
+	font:
+		500 10.5px "Geist Mono",
+		monospace;
+	color: var(--tx3);
+}
+.ob {
+	height: 100vh;
+	display: grid;
+	place-items: center;
+	position: relative;
+	overflow: hidden;
+	background: var(--bg);
+}
+.ob-glow {
+	position: absolute;
+	width: 900px;
+	height: 900px;
+	border-radius: 999px;
+	background: radial-gradient(
+		circle,
+		color-mix(in oklab, var(--ac) 16%, transparent),
+		transparent 62%
+	);
+	top: -420px;
+	left: 50%;
+	transform: translateX(-50%);
+	pointer-events: none;
+}
+.ob-box {
+	width: 530px;
+	padding: 38px 40px 24px;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	box-shadow: var(--sh);
+	box-sizing: border-box;
+	max-width: 92vw;
+}
+.dts {
+	display: flex;
+	gap: 7px;
+	justify-content: center;
+	margin-top: 26px;
+}
+.dt2 {
+	width: 6px;
+	height: 6px;
+	border-radius: 99px;
+	background: var(--line2);
+	transition: all 0.2s;
+}
+.dt2.on {
+	background: var(--ac);
+	width: 18px;
+}
+.okc {
+	width: 64px;
+	height: 64px;
+	border-radius: 99px;
+	background: color-mix(in oklab, var(--grn) 14%, transparent);
+	color: var(--grn);
+	display: grid;
+	place-items: center;
+	margin: 6px auto 2px;
+	animation: pop 0.4s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes pop {
+	from {
+		transform: scale(0.4);
+		opacity: 0;
+	}
+}
+.kbd {
+	padding: 3px 8px;
+	border-radius: 6px;
+	border: 1px solid var(--line2);
+	background: color-mix(in oklab, var(--tx) 5%, transparent);
+	font:
+		600 11px "Geist Mono",
+		monospace;
+	color: var(--tx2);
+}
+.mtr {
+	padding: 14px 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.rec {
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	padding: 20px 26px 26px;
+	box-sizing: border-box;
+	background:
+		radial-gradient(
+			55% 45% at 50% 32%,
+			color-mix(in oklab, var(--red) 5%, transparent),
+			transparent 70%
+		),
+		var(--bg);
+}
+.rmeta {
+	font:
+		500 12px "Geist",
+		sans-serif;
+	color: var(--tx3);
+	margin-left: 6px;
+}
+.timer {
+	font:
+		600 74px / 1 "Geist Mono",
+		monospace;
+	letter-spacing: 0.01em;
+	font-variant-numeric: tabular-nums;
+}
+.wave {
+	display: flex;
+	align-items: center;
+}
+.wbar {
+	border-radius: 3px;
+	background: linear-gradient(180deg, var(--ac), color-mix(in oklab, var(--ac) 45%, var(--red)));
+	animation: wv 1s ease-in-out infinite;
+	transform: scaleY(0.2);
+}
+@keyframes wv {
+	0%,
+	100% {
+		transform: scaleY(0.12);
+	}
+	50% {
+		transform: scaleY(var(--h, 1));
+	}
+}
+.wavewrap {
+	transition: opacity 0.3s;
+}
+.dead {
+	opacity: 0.45;
+}
+.dead .wbar {
+	animation: none;
+	transform: scaleY(0.07);
+}
+.ctl {
+	width: 60px;
+	height: 60px;
+	border-radius: 99px;
+	border: 1px solid var(--line2);
+	background: var(--bg2);
+	color: var(--tx2);
+	cursor: pointer;
+	display: grid;
+	place-items: center;
+	transition: all 0.15s;
+}
+.ctl:hover {
+	color: var(--tx);
+	border-color: var(--tx3);
+	transform: translateY(-1px);
+}
+.ctl.mut {
+	color: var(--red);
+	border-color: color-mix(in oklab, var(--red) 45%, transparent);
+	background: color-mix(in oklab, var(--red) 9%, transparent);
+}
+.ctl.stop {
+	width: 82px;
+	height: 82px;
+	background: var(--red);
+	border: none;
+	box-shadow: 0 10px 42px color-mix(in oklab, var(--red) 45%, transparent);
+}
+.ctl.stop:hover {
+	filter: brightness(1.08);
+	transform: scale(1.03);
+}
+.stopsq {
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+	background: #fff;
+}
+.ctll {
+	font:
+		500 11px "Geist",
+		sans-serif;
+	color: var(--tx3);
+}
+.wbar2 {
+	width: 5px;
+	border-radius: 3px;
+	background: linear-gradient(180deg, var(--ac), color-mix(in oklab, var(--ac) 45%, var(--red)));
+	height: 4px;
+	transition: height 0.08s linear;
+	flex: none;
+}
+.qmenu {
+	position: absolute;
+	right: 12px;
+	top: 44px;
+	z-index: 20;
+	min-width: 180px;
+	padding: 6px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	background: var(--bg3);
+	border: 1px solid var(--line2);
+	border-radius: 12px;
+	box-shadow: var(--sh);
+	animation: pop2 0.16s;
+}
+.qi {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	border: none;
+	background: none;
+	color: var(--tx);
+	font:
+		500 13px "Geist",
+		sans-serif;
+	cursor: pointer;
+	text-align: left;
+}
+.qi:hover {
+	background: color-mix(in oklab, var(--tx) 6%, transparent);
+}
+.qi.del {
+	color: var(--red);
+}
+.sess.open {
+	z-index: 15;
+}
+.qa {
+	padding: 8px 12px;
+	font-size: 12.5px;
+}
+.ttl-in {
+	font:
+		600 21px / 1.25 "Geist",
+		sans-serif;
+	letter-spacing: -0.01em;
+	background: transparent;
+	border: 1px solid var(--ac);
+	border-radius: 8px;
+	padding: 2px 8px;
+	margin-left: -9px;
+	color: var(--tx);
+	outline: none;
+	width: 100%;
+	box-sizing: border-box;
+}
+.ttl {
+	cursor: text;
+	border-radius: 8px;
+	padding: 2px 8px;
+	margin-left: -9px;
+	border: 1px solid transparent;
+	transition: border 0.15s;
+}
+.ttl:hover {
+	border-color: var(--line2);
+}
+.dvw {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	min-width: 210px;
+}
+.dvl {
+	font:
+		600 10px "Geist",
+		sans-serif;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+	color: var(--tx3);
+	padding-left: 2px;
+}
+.dvs {
+	padding: 8px 10px;
+	font-size: 12px;
+	background: var(--bg2);
+}
+/* Live note under a device picker (e.g. a named device fell back to the system default). */
+.dvm {
+	font-size: 11px;
+	color: var(--red);
+	padding-left: 2px;
+	max-width: 240px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.warn {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 10px 16px;
+	border-radius: 11px;
+	background: color-mix(in oklab, var(--red) 10%, transparent);
+	border: 1px solid color-mix(in oklab, var(--red) 30%, transparent);
+	font:
+		500 12.5px "Geist",
+		sans-serif;
+	animation: pin 0.25s;
+}
+.toast {
+	position: fixed;
+	bottom: 22px;
+	right: 22px;
+	z-index: 60;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 16px;
+	border-radius: 12px;
+	background: var(--bg3);
+	border: 1px solid var(--line2);
+	box-shadow: var(--sh);
+	font:
+		500 13px "Geist",
+		sans-serif;
+	color: var(--tx);
+	animation: tin 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+@keyframes tin {
+	from {
+		transform: translateY(14px);
+		opacity: 0;
+	}
+}
+.tdot {
+	width: 8px;
+	height: 8px;
+	border-radius: 99px;
+	flex: none;
+}
+.k-ok {
+	background: var(--grn);
+}
+.k-ac {
+	background: var(--ac);
+}
+.k-err {
+	background: var(--red);
+}
+.mbg {
+	position: fixed;
+	inset: 0;
+	background: rgba(5, 6, 12, 0.55);
+	backdrop-filter: blur(5px);
+	display: grid;
+	place-items: center;
+	z-index: 50;
+	animation: fin 0.18s;
+}
+@keyframes fin {
+	from {
+		opacity: 0;
+	}
+}
+.mdl {
+	width: 560px;
+	max-width: 92vw;
+	max-height: 82vh;
+	overflow-y: auto;
+	padding: 26px 28px;
+	box-shadow: var(--sh);
+	animation: pop2 0.25s cubic-bezier(0.3, 1.3, 0.5, 1);
+	box-sizing: border-box;
+}
+@keyframes pop2 {
+	from {
+		transform: scale(0.96) translateY(8px);
+		opacity: 0;
+	}
+}
+.tta {
+	width: 100%;
+	min-height: 150px;
+	resize: vertical;
+	background: color-mix(in oklab, var(--tx) 4%, transparent);
+	border: 1px solid var(--line2);
+	border-radius: 11px;
+	padding: 12px 14px;
+	color: var(--tx);
+	font:
+		400 12.5px / 1.6 "Geist Mono",
+		monospace;
+	outline: none;
+	box-sizing: border-box;
+}
+.tta:focus {
+	border-color: var(--ac);
+}
+.lbl {
+	font:
+		600 11px "Geist",
+		sans-serif;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--tx3);
+	margin: 18px 0 7px;
+	display: block;
+}
+.chatp {
+	position: fixed;
+	right: 22px;
+	bottom: 22px;
+	width: 380px;
+	height: 540px;
+	max-height: 80vh;
+	display: flex;
+	flex-direction: column;
+	z-index: 55;
+	box-shadow: var(--sh);
+	animation: tin 0.3s;
+	background: var(--bg2);
+	border: 1px solid var(--line2);
+	border-radius: 16px;
+	overflow: hidden;
+}
+.cm {
+	max-width: 86%;
+	padding: 10px 13px;
+	border-radius: 14px;
+	font:
+		400 13px / 1.55 "Geist",
+		sans-serif;
+}
+.cm.me {
+	background: var(--ac);
+	color: #fff;
+	align-self: flex-end;
+	border-bottom-right-radius: 5px;
+}
+.cm.ai {
+	background: color-mix(in oklab, var(--tx) 5%, transparent);
+	align-self: flex-start;
+	border-bottom-left-radius: 5px;
+}
+.tydots {
+	display: flex;
+	gap: 4px;
+	padding: 12px 14px;
+	align-self: flex-start;
+}
+.tyd {
+	width: 6px;
+	height: 6px;
+	border-radius: 99px;
+	background: var(--tx3);
+	animation: pl 1s infinite;
+}
+.tyd.d2 {
+	animation-delay: 0.2s;
+}
+.tyd.d3 {
+	animation-delay: 0.4s;
+}
+.stt {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font:
+		500 12.5px "Geist",
+		sans-serif;
+}
+.errc {
+	padding: 26px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	text-align: center;
+	border: 1px solid color-mix(in oklab, var(--red) 25%, transparent);
+	border-radius: var(--rad);
+	background: color-mix(in oklab, var(--red) 5%, transparent);
+}
+.pro {
+	padding: 22px;
+	border-radius: var(--rad);
+	border: 1px solid color-mix(in oklab, var(--ac) 35%, transparent);
+	background: linear-gradient(135deg, var(--acs), transparent 60%), var(--bg2);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 18px;
+	margin-top: 14px;
+}
