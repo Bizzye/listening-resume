@@ -1,6 +1,6 @@
 ---
 name: pipeline-test
-description: End-to-end smoke test of the Listening Resume audio pipeline (record → transcribe → analyze → export) driving the running API on port 3456 and inspecting the resulting WAV. Use to verify recording/transcription/analysis/mute/mic-mixing changes actually work, or after touching wasapi_capture.rs, server.ts, or the core services.
+description: End-to-end smoke test of the Listening Resume audio pipeline (record → transcribe → analyze → export) driving the running API on port 3456 and inspecting the resulting WAV. Use to verify recording/transcription/analysis/mute/mic-mixing changes actually work, or after touching the wasapi-capture binary (src-tauri/src/bin/wasapi-capture/), apps/gui/server/**, or the core services.
 ---
 
 # Pipeline smoke test (pipeline-test)
@@ -12,13 +12,14 @@ Exercises the real flow through the API server and verifies the artifacts on dis
 Server must be up on **3456** (only one process can bind it — see CLAUDE.md gotchas). If down, free the port and start a single clean server:
 
 ```bash
-powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { \$_.CommandLine -like '*server*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -EA SilentlyContinue }"
-cd apps/gui && nohup ./node_modules/.bin/tsx server.ts >/tmp/pt.log 2>&1 &
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { \$_.CommandLine -match 'server.ts|server-bundle.mjs' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -EA SilentlyContinue }"
+cd apps/gui && nohup node --import tsx server.ts >/tmp/pt.log 2>&1 &
+# hermetic alternative (no real devices / no Groq): prefix with LR_FAKE_CAPTURE=1 LR_DATA_DIR=<tmp>/data LR_CONFIG_DIR=<tmp>/config
 # wait until ready:
 for i in $(seq 1 24); do curl -s -m2 http://localhost:3456/api/recording/status >/dev/null 2>&1 && break; sleep 0.5; done
 ```
 
-> Avoid `pnpm dev:server` (it uses `--watch`; a reload mid-test orphans the recording and clears `activeSessionId`). Plain `tsx server.ts` is stable for the test. Kill it when done.
+> Avoid `pnpm dev:server` (it uses `--watch`; a reload mid-test interrupts the recording — boot reconcile then settles the session). Plain `tsx server.ts` is stable for the test. Kill it when done.
 
 For a meaningful transcript, **play audio on the system** during the recording window. With silence, expect an empty/"no speech" transcript — still a valid structural pass.
 
@@ -26,20 +27,23 @@ For a meaningful transcript, **play audio on the system** during the recording w
 
 ```bash
 B=http://localhost:3456/api
-curl -s "$B/devices"   # choose a type:"monitor" id for `device`, and optionally a type:"microphone" id for `micDevice`
-curl -s "$B/config"    # hasGroqKey? (needed for transcribe + analyze success)
+curl -s "$B/devices"          # ids for `device` (type "monitor") / `micDevice` (type "microphone"); "@default" follows the OS default
+curl -s "$B/config/groq-key"  # {configured} — needed for Groq transcription success
+curl -s "$B/health"          # ollama / whisper / ffmpeg / capture status
 ```
 
 ## 2. Record → stop
 
 ```bash
 SID=$(curl -s -X POST "$B/recording/start" -H "Content-Type: application/json" \
-  -d '{"device":"<monitor-id>","micDevice":"<mic-id-or-omit>"}' | sed -E 's/.*"id":"([^"]+)".*/\1/')
+  -d '{"device":"@default","micDevice":"@default"}' | sed -E 's/.*"id":"([^"]+)".*/\1/')
 sleep 6
-# (optional) test mute mid-recording: curl -s -X POST "$B/recording/mute" -d '{"target":"mic","muted":true}' -H "Content-Type: application/json"
-curl -s -X POST "$B/recording/stop" >/dev/null
+# (optional) mute mid-recording: curl -s -X POST "$B/recording/mute" -H "Content-Type: application/json" -d '{"target":"mic","muted":true}'
+# (optional) live device switch: curl -s -X POST "$B/recording/devices" -H "Content-Type: application/json" -d '{"micDevice":null}'
+# (optional) live levels: curl -sN "$B/audio/levels" | head -5   # SSE data: {"system":..,"mic":..}
+curl -s -X POST "$B/recording/stop" >/dev/null   # auto-transcribes if settings.autoTranscribe
 sleep 1
-curl -s "$B/sessions/$SID"   # expect status "stopped", chunks>=1, duration ≈ wall-clock seconds
+curl -s "$B/sessions/$SID"   # expect status "stopped"/"transcribing", chunks>=1, duration ≈ wall-clock seconds
 ```
 
 **Verify the WAV** with the `audio-diag` skill: duration must match real time (header-based), no clipping, and — if you tested mute — the muted segment's `max` ≈ 0.
@@ -49,22 +53,22 @@ curl -s "$B/sessions/$SID"   # expect status "stopped", chunks>=1, duration ≈ 
 ```bash
 curl -s -X POST "$B/sessions/$SID/transcribe"
 ```
-- With Groq key: HTTP 200, `transcript.segments` present (or empty if silence).
-- Without key: **graceful** 500 `{"error":"GROQ_API_KEY not set..."}` — no crash. Confirm the session status rolled back (not stuck in "transcribing").
+- Runs in background: **202** `{"status":"transcribing"}`; poll `GET $B/sessions/$SID` until `transcribed` (or `failed` with `session.lastError`).
+- Without a Groq key: immediate **400** with a pt-BR message — no crash, status unchanged. 409 if a job is already running.
 
 ## 4. Analyze
 
 ```bash
-curl -s -X POST "$B/sessions/$SID/analyze" -H "Content-Type: application/json" -d '{"templateId":"meeting-summary"}'
+curl -s -X POST "$B/sessions/$SID/analyze" -H "Content-Type: application/json" -d '{"templateId":"resumo-executivo"}'
 ```
-- No transcript → expect **400** "No transcript found", and session NOT left in "analyzing".
-- With transcript → 200, structured `analysis.content`, session → "completed" (provider may be `groq` if Ollama model isn't pulled — that's the fallback working).
+- Background: **202** `{"status":"analyzing"}`; poll the session — the analysis appears in `analyses[]`, status → `completed` (provider may be `groq` if the Ollama model isn't pulled — fallback working).
+- No transcript → 409/400 and the session is NOT left in "analyzing". A failed analysis restores the previous status and sets `lastError`.
 
 ## 5. Export (optional)
 
 ```bash
-curl -s "$B/sessions/$SID/export" -o /dev/null -w "%{http_code} %{content_type}\n"          # text/markdown
-curl -s -X POST "$B/sessions/$SID/export/save" -H "Content-Type: application/json" -d '{"format":"markdown"}'
+for f in md pdf docx; do curl -s "$B/sessions/$SID/export?format=$f" -o /dev/null -w "$f %{http_code} %{content_type}\n"; done
+curl -s -X POST "$B/sessions/$SID/export/save" -H "Content-Type: application/json" -d '{"format":"md"}'   # → {path}
 ```
 
 ## 6. Report + cleanup

@@ -6,7 +6,7 @@ description: Diagnose a recorded WAV from a Listening Resume session — reads t
 # Audio diagnostics (audio-diag)
 
 WAV chunks live at `%LOCALAPPDATA%\listening-resume\sessions\<id>\audio\chunk_0000.wav`.
-WAV header offsets: channels @22 (u16), sampleRate @24 (u32), bitsPerSample @34 (u16), dataSize @40 (u32). Samples start at byte 44.
+Chunks are 16-bit PCM at the configured output format (default 16 kHz mono; the binary resamples every source). WAV header offsets (canonical 44-byte header written by wasapi-capture): channels @22 (u16), sampleRate @24 (u32), bitsPerSample @34 (u16), dataSize @40 (u32). Samples start at byte 44. For arbitrary WAVs use core `readWavInfo` (walks RIFF chunks).
 
 ## Header + duration + peak/RMS/clipping
 
@@ -27,7 +27,7 @@ $rms=[math]::Sqrt($sumsq/$n)
 ```
 
 Interpret:
-- **Duration wrong** in the UI but right here → the duration calc (`getAudioDuration` in `server.ts`) isn't reading the header (e.g. assuming 16k/mono → 6x inflation).
+- **Duration wrong** in the UI but right here → the duration calc isn't using the header (core `readWavInfo`/`totalWavDurationSec`, used by `apps/gui/server/services/sessions.ts`).
 - **clipped > 0** or peak ≈ 0 dBFS → real clipping ("estourado"). If peak is low (−9 dBFS or less) and the user still hears distortion, it's playback-side, not the capture.
 - **max = 0** → pure silence (nothing played, or system muted).
 
@@ -37,7 +37,7 @@ Interpret:
 $prev=0;$g=0; for($i=44;$i -lt $b.Length-3;$i+=4){ $v=[int][BitConverter]::ToInt16($b,$i); if([math]::Abs($v-$prev) -gt 16384){$g++}; $prev=$v }
 "glitches(|Δ|>half-scale)=$g"
 ```
-Many half-scale jumps at 48 kHz = dropped packets (capture overrun).
+Many half-scale jumps = dropped packets (capture overrun).
 
 ## Per-segment level (verify mute / mic mixing)
 
