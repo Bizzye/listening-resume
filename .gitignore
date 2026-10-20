@@ -11,9 +11,11 @@ apps/gui/src-tauri/resources/bin/
 apps/gui/src-tauri/resources/node_modules/
 apps/gui/src-tauri/resources/server-bundle.mjs
 
-# Installer artifacts
+# Installer artifacts (collected copies land in exe/ — see apps/gui/scripts/collect-installers.mjs)
+exe/
 *.exe
 *.msi
+*.deb
 
 # Secrets & local data
 .env
@@ -26,3 +28,6 @@ apps/gui/src-tauri/resources/server-bundle.mjs
 # Tooling / scratch
 .playwright-mcp/
 analysis-tab.png
+# Local-only docs (report, imported design); only the README screenshots are published
+/docs/*
+!/docs/images/
