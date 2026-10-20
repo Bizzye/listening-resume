@@ -25,6 +25,7 @@ import {
 	SettingsStore,
 	SQLiteRepository,
 	SYSTEM_DEFAULT_DEVICE,
+	selectAnalyzers,
 	setupSignalHandlers,
 	TranscriptionService,
 	totalWavDurationSec,
@@ -140,8 +141,11 @@ function transcriptionService(ctx: Context, repo: SQLiteRepository): Transcripti
 function analysisService(ctx: Context, repo: SQLiteRepository): AnalysisService {
 	const { analysis } = ctx.config;
 	const groqKey = process.env.GROQ_API_KEY;
-	const primary = new OllamaAdapter(ctx.prefs.analysisModel, analysis.ollamaHost);
-	const fallback = groqKey ? new GroqLLMAdapter(groqKey, analysis.fallback?.model) : null;
+	const { primary, fallback } = selectAnalyzers(
+		analysis.provider,
+		new OllamaAdapter(ctx.prefs.analysisModel, analysis.ollamaHost),
+		groqKey ? new GroqLLMAdapter(groqKey, analysis.fallback?.model) : null,
+	);
 	return new AnalysisService(primary, fallback, repo);
 }
 

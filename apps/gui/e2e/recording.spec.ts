@@ -123,7 +123,8 @@ test("recording journey: live waveform, live device switch, mute → silence, st
 	const current = await page
 		.getByTestId("session-audio")
 		.evaluate((a) => (a as HTMLAudioElement).currentTime);
-	expect(current).toBeGreaterThanOrEqual(transcript?.segments[n - 1].start ?? 0);
+	// <audio> stores currentTime as a double rounded by the media pipeline (6.06 vs 6.0600000000000005).
+	expect(current).toBeGreaterThanOrEqual((transcript?.segments[n - 1].start ?? 0) - 0.01);
 
 	// Scrub to the start.
 	const scrub = page.getByTestId("scrub");

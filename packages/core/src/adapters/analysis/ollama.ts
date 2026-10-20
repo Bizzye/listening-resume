@@ -3,16 +3,14 @@ import { DEFAULT_ANALYSIS_MODEL, DEFAULT_OLLAMA_HOST } from "../../constants.js"
 import { AnalysisError, errorMessage } from "../../domain/errors.js";
 import type { AnalyzeRequest, AnalyzeResult, AnalyzerPort } from "../../ports/analyzer.js";
 
-const MIN_CONTEXT = 8192;
-const MAX_CONTEXT = 32768;
-const OUTPUT_BUDGET = 2048;
-
-/** Context size (tokens) fitting a prompt of `chars` characters plus the answer. Pure. */
-export function contextWindowFor(chars: number): number {
-	const needed = Math.ceil(chars / 3) + OUTPUT_BUDGET; // ~3 chars/token for pt-BR, conservative
-	const pow2 = 2 ** Math.ceil(Math.log2(Math.max(needed, 1)));
-	return Math.min(MAX_CONTEXT, Math.max(MIN_CONTEXT, pow2));
-}
+/**
+ * Ollama defaults num_ctx to ~2048, which silently truncates long lecture transcripts — the model
+ * would only "see" the first minutes. 8192 fits an ~40 min class AND keeps an 8B model fully on an
+ * 8 GB GPU (a bigger context spills to CPU and the analysis crawls). For long lectures, Groq
+ * (70B, 128k context) is the better primary (`config.analysis.provider = "groq"`).
+ * Low temperature keeps the output faithful to the transcript.
+ */
+export const OLLAMA_CHAT_OPTIONS = { num_ctx: 8192, num_predict: 4096, temperature: 0.3 } as const;
 
 export class OllamaAdapter implements AnalyzerPort {
 	readonly provider = "ollama";
@@ -35,10 +33,7 @@ export class OllamaAdapter implements AnalyzerPort {
 					{ role: "system", content: request.systemPrompt },
 					{ role: "user", content: request.userPrompt },
 				],
-				// Ollama's default context (2–4k tokens) silently truncates long transcripts.
-				options: {
-					num_ctx: contextWindowFor(request.systemPrompt.length + request.userPrompt.length),
-				},
+				options: { ...OLLAMA_CHAT_OPTIONS },
 			});
 			const content = response.message.content.trim();
 			if (!content)

@@ -192,7 +192,7 @@ test("documentation screenshots @screens", async ({ page, api }) => {
 
 	// ── Templates ───────────────────────────────────────────────────────────────────────────
 	await page.getByTestId("nav-templates").click();
-	await expect(page.getByTestId("template-card")).toHaveCount(5);
+	await expect(page.getByTestId("template-card")).toHaveCount(6);
 	await quiet(page);
 	await page.mouse.move(0, 0);
 	await shot(page, "14-templates");

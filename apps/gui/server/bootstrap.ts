@@ -4,7 +4,6 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-	type AnalyzerPort,
 	createCaptureAdapter,
 	createTranscriber,
 	defaultCaptureBackend,
@@ -24,6 +23,7 @@ import {
 	run,
 	SettingsStore,
 	SQLiteRepository,
+	selectAnalyzers,
 	type WhisperModel,
 	whisperModelPath,
 } from "@listening-resume/core";
@@ -210,10 +210,12 @@ export function buildDeps(opts: BootOptions): {
 			create(s) {
 				if (opts.fake)
 					return { primary: new FakeAnalyzer({ delayMs: fakeDelayMs }), fallback: null };
-				const primary: AnalyzerPort = new OllamaAdapter(s.analysisModel, ollamaUrl);
 				const key = groqKey.get();
-				const fallback = key ? new GroqLLMAdapter(key, config.analysis.fallback?.model) : null;
-				return { primary, fallback };
+				return selectAnalyzers(
+					config.analysis.provider,
+					new OllamaAdapter(s.analysisModel, ollamaUrl),
+					key ? new GroqLLMAdapter(key, config.analysis.fallback?.model) : null,
+				);
 			},
 		},
 		health: opts.fake

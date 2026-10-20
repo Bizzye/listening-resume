@@ -150,14 +150,13 @@ export class JobRunner {
 		sessionId: string,
 		template: AnalysisTemplate,
 		analyzers: { primary: AnalyzerPort; fallback: AnalyzerPort | null },
-		settings: Pick<Settings, "analysisLanguage" | "analysisModel">,
+		settings: Pick<Settings, "analysisLanguage">,
 	): void {
 		const service = new AnalysisService(analyzers.primary, analyzers.fallback, this.deps.repo);
 		this.launch(sessionId, "analysis", () =>
-			service.analyzeSession(sessionId, template, {
-				language: settings.analysisLanguage,
-				model: settings.analysisModel,
-			}),
+			// No model override: the analyzers are built per call from settings (the Ollama model
+			// is already settings.analysisModel), and Groq may be the primary.
+			service.analyzeSession(sessionId, template, { language: settings.analysisLanguage }),
 		);
 	}
 }

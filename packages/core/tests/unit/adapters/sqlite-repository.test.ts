@@ -220,15 +220,16 @@ describe("SQLiteRepository", () => {
 	});
 
 	describe("templates", () => {
-		it("lists the 5 built-ins first, then custom templates", () => {
+		it("lists the built-ins first, then custom templates", () => {
 			const custom = repo.createTemplate({
 				name: "Revisão de Entrevista",
 				description: "Avaliação por competência",
 				prompt: "## Técnica\n## Comunicação\nAvalie o candidato.",
 			});
 			const list = repo.listTemplates();
-			expect(list.slice(0, 5).map((t) => t.id)).toEqual(BUILTIN_TEMPLATES.map((t) => t.id));
-			expect(list[5]).toMatchObject({
+			const n = BUILTIN_TEMPLATES.length;
+			expect(list.slice(0, n).map((t) => t.id)).toEqual(BUILTIN_TEMPLATES.map((t) => t.id));
+			expect(list[n]).toMatchObject({
 				id: custom.id,
 				name: "Revisão de Entrevista",
 				description: "Avaliação por competência",

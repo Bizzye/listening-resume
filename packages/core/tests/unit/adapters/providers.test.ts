@@ -1,7 +1,7 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { GroqLLMAdapter } from "../../../src/adapters/analysis/groq-llm.js";
-import { contextWindowFor, OllamaAdapter } from "../../../src/adapters/analysis/ollama.js";
+import { OLLAMA_CHAT_OPTIONS, OllamaAdapter } from "../../../src/adapters/analysis/ollama.js";
 import { FakeAnalyzer } from "../../../src/adapters/fake/fake-analyzer.js";
 import { FakeTranscriber } from "../../../src/adapters/fake/fake-transcriber.js";
 import {
@@ -64,10 +64,8 @@ describe("transcriber factory", () => {
 });
 
 describe("analysis adapters", () => {
-	it("sizes the Ollama context to the prompt", () => {
-		expect(contextWindowFor(100)).toBe(8192);
-		expect(contextWindowFor(30_000)).toBe(16384);
-		expect(contextWindowFor(1_000_000)).toBe(32768);
+	it("uses a fixed Ollama context that fits an 8 GB GPU, with room for long answers", () => {
+		expect(OLLAMA_CHAT_OPTIONS).toEqual({ num_ctx: 8192, num_predict: 4096, temperature: 0.3 });
 	});
 
 	it("expose provider/model", () => {

@@ -1,5 +1,10 @@
 export { GroqLLMAdapter } from "./adapters/analysis/groq-llm.js";
-export { contextWindowFor, OllamaAdapter } from "./adapters/analysis/ollama.js";
+export { OLLAMA_CHAT_OPTIONS, OllamaAdapter } from "./adapters/analysis/ollama.js";
+export {
+	type AnalysisProvider,
+	type AnalyzerPair,
+	selectAnalyzers,
+} from "./adapters/analysis/select.js";
 export {
 	assertDeviceId,
 	buildCaptureArgs,

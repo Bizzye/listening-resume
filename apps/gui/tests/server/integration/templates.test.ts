@@ -8,11 +8,12 @@ describe("templates", () => {
 	});
 	afterAll(() => t.close());
 
-	it("lists the 5 built-ins", async () => {
+	it("lists the 6 built-ins", async () => {
 		const { body } = await t.json("/templates");
 		const builtins = body.templates.filter((x: Json) => x.builtin);
 		expect(builtins.map((x: Json) => x.id)).toEqual([
 			"videoaula-extracao",
+			"videoaula-insana",
 			"ata-reuniao",
 			"resumo-executivo",
 			"flashcards-anki",

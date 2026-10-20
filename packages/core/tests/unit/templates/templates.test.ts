@@ -14,9 +14,10 @@ import {
 } from "../../../src/templates/index.js";
 
 describe("built-in templates", () => {
-	it("are the 5 pt-BR templates from the design", () => {
+	it("are the 5 pt-BR templates from the design plus the 12-section study document", () => {
 		expect(BUILTIN_TEMPLATES.map((t) => [t.id, t.name, t.sections])).toEqual([
 			["videoaula-extracao", "Videoaula — Extração Total", 5],
+			["videoaula-insana", "Videoaula — Estudo Completo", 12],
 			["ata-reuniao", "Ata de Reunião", 4],
 			["resumo-executivo", "Resumo Executivo", 2],
 			["flashcards-anki", "Flashcards (Anki)", 1],

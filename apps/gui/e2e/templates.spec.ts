@@ -7,7 +7,7 @@ test("templates: built-ins are read-only; custom template create → edit → de
 	await openApp(page);
 	await page.getByTestId("nav-templates").click();
 	const cards = page.getByTestId("template-card");
-	await expect(cards).toHaveCount(5);
+	await expect(cards).toHaveCount(6);
 	for (const name of [
 		"Videoaula — Extração Total",
 		"Ata de Reunião",
@@ -27,7 +27,7 @@ test("templates: built-ins are read-only; custom template create → edit → de
 	await expect(page.getByTestId("template-prompt-input")).not.toBeEmpty();
 	await page.keyboard.press("Escape");
 	await expect(modal).toBeHidden();
-	await expect(cards).toHaveCount(5);
+	await expect(cards).toHaveCount(6);
 
 	await cards.filter({ hasText: "Resumo Executivo" }).first().click();
 	await page.getByTestId("template-save-button").click();
@@ -35,11 +35,11 @@ test("templates: built-ins are read-only; custom template create → edit → de
 	const copy = cards.filter({ hasText: "Resumo Executivo (cópia)" });
 	await expect(copy).toHaveCount(1);
 	await expect(copy).toContainText("custom");
-	await expect(cards).toHaveCount(6);
+	await expect(cards).toHaveCount(7);
 	await copy.click();
 	await expect(page.getByTestId("template-delete-button")).toBeVisible();
 	await page.getByTestId("template-delete-button").click();
-	await expect(cards).toHaveCount(5);
+	await expect(cards).toHaveCount(6);
 
 	// Create.
 	await page.getByTestId("new-template-button").click();
@@ -79,5 +79,5 @@ test("templates: built-ins are read-only; custom template create → edit → de
 	await page.getByTestId("template-delete-button").click();
 	await expect(modal).toBeHidden();
 	await expect(page.getByTestId("toast")).toHaveText("Template apagado");
-	await expect(cards).toHaveCount(5);
+	await expect(cards).toHaveCount(6);
 });
