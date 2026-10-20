@@ -1,125 +1,149 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AnalysisService } from "../../../src/application/analysis.service.js";
-import { AnalysisError } from "../../../src/domain/errors.js";
-import type { Transcript } from "../../../src/domain/models.js";
-import type { AnalyzerPort } from "../../../src/ports/analyzer.js";
-import type { SessionRepository } from "../../../src/ports/repository.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { FakeAnalyzer } from "../../../src/adapters/fake/fake-analyzer.js";
+import { SQLiteRepository } from "../../../src/adapters/persistence/sqlite.js";
+import {
+	AnalysisService,
+	formatTranscriptForPrompt,
+} from "../../../src/application/analysis.service.js";
+import {
+	AnalysisError,
+	ConflictError,
+	NotFoundError,
+	ValidationError,
+} from "../../../src/domain/errors.js";
+import type { AnalysisTemplate, Session, Transcript } from "../../../src/domain/models.js";
+import { getBuiltinTemplate } from "../../../src/templates/index.js";
+import { makeSession } from "../../helpers.js";
+
+const template = getBuiltinTemplate("resumo-executivo") as AnalysisTemplate;
 
 describe("AnalysisService", () => {
-	let mockAnalyzer: AnalyzerPort;
-	let mockFallback: AnalyzerPort;
-	let mockRepo: SessionRepository;
-	let service: AnalysisService;
+	let repo: SQLiteRepository;
+	let session: Session;
 
-	const template = {
-		id: "meeting-summary",
-		name: "Meeting Summary",
-		systemPrompt: "You are a summarizer.",
-		userPromptTemplate: "Summarize: {{transcript}}",
-	};
-
-	const mockTranscript: Transcript = {
-		id: "t1",
-		sessionId: "s1",
-		segments: [],
-		fullText: "Hello world discussion",
-		language: "en",
-		provider: "groq",
-		model: "whisper",
-		createdAt: "2024-01-01",
-	};
+	const transcript = (sessionId: string): Transcript => ({
+		id: `t-${sessionId}`,
+		sessionId,
+		segments: [
+			{ start: 0, end: 4, text: "Bom dia, pessoal." },
+			{ start: 65, end: 70, text: "A entropia nunca diminui." },
+		],
+		fullText: "Bom dia, pessoal. A entropia nunca diminui.",
+		language: "pt",
+		provider: "fake",
+		model: "fake",
+		createdAt: new Date().toISOString(),
+	});
 
 	beforeEach(() => {
-		mockAnalyzer = {
-			provider: "ollama",
-			model: "llama3.1:8b",
-			analyze: vi.fn(),
-			isAvailable: vi.fn(),
-		};
+		repo = new SQLiteRepository(":memory:");
+		session = makeSession({ status: "transcribed", title: "Aula 12" });
+		repo.createSession(session);
+		repo.saveTranscript(transcript(session.id));
+	});
+	afterEach(() => repo.close());
 
-		mockFallback = {
-			provider: "groq",
-			model: "llama-3.3-70b",
-			analyze: vi.fn(),
-			isAvailable: vi.fn(),
-		};
+	it("renders the template with title + timestamped transcript and stores the analysis", async () => {
+		const analyzer = new FakeAnalyzer();
+		const service = new AnalysisService(analyzer, null, repo);
+		const analysis = await service.analyzeSession(session.id, template);
 
-		mockRepo = {
-			createSession: vi.fn(),
-			updateSession: vi.fn(),
-			getSession: vi.fn(),
-			listSessions: vi.fn(),
-			addChunk: vi.fn(),
-			updateChunk: vi.fn(),
-			getChunks: vi.fn(),
-			saveTranscript: vi.fn(),
-			getTranscript: vi.fn(),
-			saveAnalysis: vi.fn(),
-			getAnalyses: vi.fn(),
-		};
+		const [request] = analyzer.requests;
+		expect(request.systemPrompt).toContain("português do Brasil");
+		expect(request.userPrompt).toContain("Título da sessão: Aula 12");
+		expect(request.userPrompt).toContain(
+			"[0:00] Bom dia, pessoal.\n[1:05] A entropia nunca diminui.",
+		);
+		expect(request.userPrompt).not.toContain("{transcricao}");
+		expect(request.model).toBeUndefined();
 
-		service = new AnalysisService(mockAnalyzer, mockFallback, mockRepo);
+		expect(analysis).toMatchObject({ templateId: "resumo-executivo", provider: "fake" });
+		expect(analysis.content).toContain("## Contexto");
+		expect(repo.getAnalyses(session.id)).toHaveLength(1);
+		expect(repo.getSession(session.id)).toMatchObject({ status: "completed", lastError: null });
 	});
 
-	it("analyzes session with primary analyzer", async () => {
-		vi.mocked(mockRepo.getTranscript).mockReturnValue(mockTranscript);
-		vi.mocked(mockAnalyzer.isAvailable).mockResolvedValue(true);
-		vi.mocked(mockAnalyzer.analyze).mockResolvedValue({
-			content: "Summary of discussion",
-			model: "llama3.1:8b",
-			provider: "ollama",
+	it("applies language, model override and extra instructions", async () => {
+		const analyzer = new FakeAnalyzer();
+		const service = new AnalysisService(analyzer, null, repo);
+		const analysis = await service.analyzeSession(session.id, template, {
+			language: "en",
+			model: "qwen2.5:14b",
+			extraInstructions: "Seja breve.",
+		});
+		const [request] = analyzer.requests;
+		expect(request.systemPrompt).toContain("ALWAYS answer in English");
+		expect(request.systemPrompt).toContain("Instruções adicionais: Seja breve.");
+		expect(request.model).toBe("qwen2.5:14b");
+		expect(analysis.model).toBe("qwen2.5:14b");
+	});
+
+	it("falls back when the primary is unavailable or fails (without the model override)", async () => {
+		const fallback = new FakeAnalyzer({ provider: "groq", model: "llama-3.3-70b-versatile" });
+		const offline = new AnalysisService(new FakeAnalyzer({ available: false }), fallback, repo);
+		const a = await offline.analyzeSession(session.id, template, { model: "llama3.1:8b" });
+		expect(a).toMatchObject({ provider: "groq", model: "llama-3.3-70b-versatile" });
+		expect(fallback.requests[0].model).toBeUndefined();
+
+		const broken = new AnalysisService(new FakeAnalyzer({ failWith: "boom" }), fallback, repo);
+		expect((await broken.analyzeSession(session.id, template)).provider).toBe("groq");
+		expect(repo.countAnalyses(session.id)).toBe(2);
+	});
+
+	it("restores the previous status and records lastError on failure", async () => {
+		const service = new AnalysisService(new FakeAnalyzer({ available: false }), null, repo);
+		const err = await service.analyzeSession(session.id, template).catch((e: unknown) => e);
+		expect(err).toBeInstanceOf(AnalysisError);
+		expect((err as Error).message).toMatch(/Ollama não está em execução/);
+		expect(repo.getSession(session.id)).toMatchObject({
+			status: "transcribed",
+			lastError: (err as Error).message,
 		});
 
-		const result = await service.analyzeSession("s1", template);
-
-		expect(result.content).toBe("Summary of discussion");
-		expect(result.provider).toBe("ollama");
-		expect(mockRepo.saveAnalysis).toHaveBeenCalledTimes(1);
-		expect(mockRepo.updateSession).toHaveBeenCalledWith("s1", {
+		repo.updateSession(session.id, { status: "completed" });
+		const healthy = new AnalysisService(new FakeAnalyzer(), null, repo);
+		const failing = new FakeAnalyzer({ failWith: "Ollama (x): connect ECONNREFUSED" });
+		await new AnalysisService(failing, null, repo)
+			.analyzeSession(session.id, template)
+			.catch(() => {});
+		expect(repo.getSession(session.id)).toMatchObject({
 			status: "completed",
+			lastError: expect.stringMatching(/Ollama/),
 		});
+		await healthy.analyzeSession(session.id, template);
+		expect(repo.getSession(session.id)?.lastError).toBeNull();
 	});
 
-	it("falls back when primary is unavailable", async () => {
-		vi.mocked(mockRepo.getTranscript).mockReturnValue(mockTranscript);
-		vi.mocked(mockAnalyzer.isAvailable).mockResolvedValue(false);
-		vi.mocked(mockFallback.analyze).mockResolvedValue({
-			content: "Fallback summary",
-			model: "llama-3.3-70b",
-			provider: "groq",
-		});
+	it("validates the session and transcript before changing status", async () => {
+		const service = new AnalysisService(new FakeAnalyzer(), null, repo);
+		await expect(service.analyzeSession("nope", template)).rejects.toBeInstanceOf(NotFoundError);
 
-		const result = await service.analyzeSession("s1", template);
+		const bare = makeSession({ status: "stopped" });
+		repo.createSession(bare);
+		await expect(service.analyzeSession(bare.id, template)).rejects.toBeInstanceOf(ValidationError);
+		expect(repo.getSession(bare.id)?.status).toBe("stopped");
 
-		expect(result.content).toBe("Fallback summary");
-		expect(result.provider).toBe("groq");
+		const empty = makeSession({ status: "transcribed" });
+		repo.createSession(empty);
+		repo.saveTranscript({ ...transcript(empty.id), segments: [], fullText: "  " });
+		await expect(service.analyzeSession(empty.id, template)).rejects.toThrow(/vazia/);
 	});
 
-	it("falls back when primary throws error", async () => {
-		vi.mocked(mockRepo.getTranscript).mockReturnValue(mockTranscript);
-		vi.mocked(mockAnalyzer.isAvailable).mockResolvedValue(true);
-		vi.mocked(mockAnalyzer.analyze).mockRejectedValue(new Error("connection refused"));
-		vi.mocked(mockFallback.analyze).mockResolvedValue({
-			content: "Fallback result",
-			model: "llama-3.3-70b",
-			provider: "groq",
-		});
-
-		const result = await service.analyzeSession("s1", template);
-		expect(result.content).toBe("Fallback result");
+	it("formats transcripts without segments as plain text", () => {
+		expect(
+			formatTranscriptForPrompt({ ...transcript("x"), segments: [], fullText: " só texto " }),
+		).toBe("só texto");
 	});
 
-	it("throws when no transcript exists", async () => {
-		vi.mocked(mockRepo.getTranscript).mockReturnValue(null);
-
-		await expect(service.analyzeSession("s1", template)).rejects.toThrow(AnalysisError);
-	});
-
-	it("throws when both primary and fallback are null/fail", async () => {
-		vi.mocked(mockRepo.getTranscript).mockReturnValue(mockTranscript);
-		vi.mocked(mockAnalyzer.isAvailable).mockResolvedValue(false);
-
-		const serviceNoFallback = new AnalysisService(mockAnalyzer, null, mockRepo);
-		await expect(serviceNoFallback.analyzeSession("s1", template)).rejects.toThrow();
+	it("refuses (409) while the session is analyzing, transcribing or recording", async () => {
+		const service = new AnalysisService(new FakeAnalyzer(), null, repo);
+		for (const status of ["analyzing", "transcribing", "recording"] as const) {
+			repo.updateSession(session.id, { status });
+			await expect(service.analyzeSession(session.id, template)).rejects.toBeInstanceOf(
+				ConflictError,
+			);
+			expect(repo.getSession(session.id)?.status).toBe(status);
+		}
+		expect(repo.countAnalyses(session.id)).toBe(0);
 	});
 });

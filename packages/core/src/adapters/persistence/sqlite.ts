@@ -1,232 +1,249 @@
+import { randomUUID } from "node:crypto";
 import Database from "better-sqlite3";
-import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { asc, count, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
+import { type BetterSQLite3Database, drizzle } from "drizzle-orm/better-sqlite3";
+import { NotFoundError, ValidationError } from "../../domain/errors.js";
 import type {
 	Analysis,
+	AnalysisTemplate,
 	AudioChunk,
+	NewTemplate,
 	Session,
+	SessionStatus,
 	Transcript,
 	TranscriptSegment,
 } from "../../domain/models.js";
-import type { AnalysisTemplate } from "../../ports/analyzer.js";
-import type { SessionRepository } from "../../ports/repository.js";
-import { actionItemsTemplate } from "../../templates/action-items.js";
-import { meetingSummaryTemplate } from "../../templates/meeting-summary.js";
+import type {
+	ListSessionsOptions,
+	SessionRepository,
+	SessionUpdate,
+} from "../../ports/repository.js";
+import {
+	BUILTIN_TEMPLATES,
+	countPromptSections,
+	getBuiltinTemplate,
+	normalizeTemplateInput,
+} from "../../templates/index.js";
 import * as schema from "./schema.js";
 
+type SessionRow = typeof schema.sessions.$inferSelect;
+type TemplateRow = typeof schema.analysisTemplates.$inferSelect;
+
+function toSession(row: SessionRow): Session {
+	return {
+		id: row.id,
+		title: row.title,
+		status: row.status as SessionStatus,
+		startedAt: row.startedAt,
+		endedAt: row.endedAt,
+		audioSource: row.audioSource,
+		language: row.language,
+		createdAt: row.createdAt,
+		exportDir: row.exportDir ?? null,
+		lastError: row.lastError ?? null,
+	};
+}
+
+function toTemplate(row: TemplateRow): AnalysisTemplate {
+	return {
+		id: row.id,
+		name: row.name,
+		description: row.description ?? "",
+		prompt: row.prompt,
+		builtin: false,
+		sections: countPromptSections(row.prompt),
+		language: "pt-BR",
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt,
+	};
+}
+
+const BUILTIN_READ_ONLY =
+	"Templates padrão não podem ser alterados. Crie um novo template para personalizar.";
+
+/** better-sqlite3 + drizzle repository. Pass `":memory:"` for an in-memory database. */
 export class SQLiteRepository implements SessionRepository {
-	private db: ReturnType<typeof drizzle>;
-	private sqlite: Database.Database;
+	private readonly sqlite: Database.Database;
+	private readonly db: BetterSQLite3Database<typeof schema>;
 
 	constructor(dbPath: string) {
 		this.sqlite = new Database(dbPath);
-		this.sqlite.pragma("journal_mode = WAL");
+		if (dbPath !== ":memory:") this.sqlite.pragma("journal_mode = WAL");
 		this.db = drizzle(this.sqlite, { schema });
-		this.migrate(this.sqlite);
+		this.migrate();
 	}
 
 	close(): void {
 		this.sqlite.close();
 	}
 
-	private migrate(sqlite: Database.Database): void {
-		sqlite.exec(`
-      CREATE TABLE IF NOT EXISTS sessions (
-        id TEXT PRIMARY KEY,
-        title TEXT,
-        status TEXT NOT NULL,
-        started_at TEXT,
-        ended_at TEXT,
-        audio_source TEXT,
-        language TEXT NOT NULL DEFAULT 'auto',
-        created_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS audio_chunks (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        "index" INTEGER NOT NULL,
-        path TEXT NOT NULL,
-        duration_ms INTEGER,
-        sample_rate INTEGER NOT NULL DEFAULT 16000,
-        status TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS transcripts (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        segments_json TEXT,
-        full_text TEXT,
-        language TEXT,
-        provider TEXT,
-        model TEXT,
-        created_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS analyses (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        template_id TEXT NOT NULL,
-        provider TEXT NOT NULL,
-        model TEXT NOT NULL,
-        content TEXT,
-        created_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS analysis_templates (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        user_prompt_template TEXT NOT NULL,
-        builtin INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-    `);
-		this.seedBuiltinTemplates();
-	}
-
-	private seedBuiltinTemplates(): void {
-		const now = new Date().toISOString();
-		const builtins = [meetingSummaryTemplate, actionItemsTemplate];
-		for (const t of builtins) {
-			const existing = this.db
-				.select()
-				.from(schema.analysisTemplates)
-				.where(eq(schema.analysisTemplates.id, t.id))
-				.get();
-			if (!existing) {
-				this.db
-					.insert(schema.analysisTemplates)
-					.values({
-						id: t.id,
-						name: t.name,
-						userPromptTemplate: t.userPromptTemplate,
-						builtin: 1,
-						createdAt: now,
-						updatedAt: now,
-					})
-					.run();
-			} else {
-				// Update builtin templates if content changed
-				this.db
-					.update(schema.analysisTemplates)
-					.set({
-						name: t.name,
-						userPromptTemplate: t.userPromptTemplate,
-						updatedAt: now,
-					})
-					.where(eq(schema.analysisTemplates.id, t.id))
-					.run();
+	/** Idempotent: creates missing tables/indexes and adds columns introduced later. */
+	private migrate(): void {
+		this.sqlite.exec(schema.CREATE_TABLES_SQL);
+		for (const [table, columns] of Object.entries(schema.ADDED_COLUMNS)) {
+			const existing = new Set(
+				(this.sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+					(c) => c.name,
+				),
+			);
+			for (const [column, type] of Object.entries(columns)) {
+				if (!existing.has(column)) {
+					this.sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+				}
 			}
 		}
+		// Built-ins used to be seeded into the table; they now live in code.
+		this.sqlite.exec("DELETE FROM analysis_templates WHERE builtin = 1");
+		this.ensureUniqueChunkPaths();
 	}
+
+	/**
+	 * One chunk row per (session, file): older versions could register a file twice (stop
+	 * racing the chunk event). Duplicates are dropped (keeping the first row) before the unique
+	 * index is created; idempotent.
+	 */
+	private ensureUniqueChunkPaths(): void {
+		const exists = this.sqlite
+			.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?")
+			.get(schema.CHUNK_PATH_INDEX);
+		if (exists) return;
+		this.sqlite.transaction(() => {
+			this.sqlite.exec(
+				`DELETE FROM audio_chunks WHERE rowid NOT IN (
+					SELECT MIN(rowid) FROM audio_chunks GROUP BY session_id, path
+				)`,
+			);
+			this.sqlite.exec(
+				`CREATE UNIQUE INDEX ${schema.CHUNK_PATH_INDEX} ON audio_chunks(session_id, path)`,
+			);
+		})();
+	}
+
+	// --- Sessions ---
 
 	createSession(session: Session): void {
-		this.db
-			.insert(schema.sessions)
-			.values({
-				id: session.id,
-				title: session.title,
-				status: session.status,
-				startedAt: session.startedAt,
-				endedAt: session.endedAt,
-				audioSource: session.audioSource,
-				language: session.language,
-				createdAt: session.createdAt,
-			})
-			.run();
+		this.db.insert(schema.sessions).values(session).run();
 	}
 
-	updateSession(id: string, data: Partial<Session>): void {
-		const mapped: Record<string, unknown> = {};
-		if (data.title !== undefined) mapped.title = data.title;
-		if (data.status !== undefined) mapped.status = data.status;
-		if (data.startedAt !== undefined) mapped.startedAt = data.startedAt;
-		if (data.endedAt !== undefined) mapped.endedAt = data.endedAt;
-		if (data.audioSource !== undefined) mapped.audioSource = data.audioSource;
-		if (data.language !== undefined) mapped.language = data.language;
-
-		this.db.update(schema.sessions).set(mapped).where(eq(schema.sessions.id, id)).run();
+	updateSession(id: string, data: SessionUpdate): void {
+		const values = Object.fromEntries(
+			Object.entries(data).filter(([key, v]) => v !== undefined && key !== "id"),
+		) as SessionUpdate;
+		if (Object.keys(values).length === 0) return;
+		this.db.update(schema.sessions).set(values).where(eq(schema.sessions.id, id)).run();
 	}
 
 	getSession(id: string): Session | null {
 		const row = this.db.select().from(schema.sessions).where(eq(schema.sessions.id, id)).get();
-		if (!row) return null;
-		return {
-			id: row.id,
-			title: row.title,
-			status: row.status as Session["status"],
-			startedAt: row.startedAt,
-			endedAt: row.endedAt,
-			audioSource: row.audioSource,
-			language: row.language,
-			createdAt: row.createdAt,
-		};
+		return row ? toSession(row) : null;
 	}
 
-	listSessions(limit = 20): Session[] {
-		const rows = this.db.select().from(schema.sessions).limit(limit).all();
-		return rows.map((row) => ({
-			id: row.id,
-			title: row.title,
-			status: row.status as Session["status"],
-			startedAt: row.startedAt,
-			endedAt: row.endedAt,
-			audioSource: row.audioSource,
-			language: row.language,
-			createdAt: row.createdAt,
-		}));
+	findSessionByIdPrefix(prefix: string): Session | null {
+		const needle = prefix.trim();
+		if (!needle) return null;
+		const exact = this.getSession(needle);
+		if (exact) return exact;
+		const rows = this.db
+			.select()
+			.from(schema.sessions)
+			.where(sql`substr(${schema.sessions.id}, 1, ${needle.length}) = ${needle}`)
+			.limit(2)
+			.all();
+		return rows.length === 1 ? toSession(rows[0]) : null;
 	}
 
-	addChunk(chunk: AudioChunk): void {
-		this.db
+	listSessions(options: ListSessionsOptions = {}): Session[] {
+		const limit = Math.max(1, Math.min(options.limit ?? 50, 1000));
+		const query = options.query?.trim();
+		const s = schema.sessions;
+		let where: SQL | undefined;
+		if (query) {
+			const pattern = `%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+			where = or(
+				sql`${s.title} LIKE ${pattern} ESCAPE '\\'`,
+				sql`EXISTS (SELECT 1 FROM transcripts t WHERE t.session_id = ${s.id} AND t.full_text LIKE ${pattern} ESCAPE '\\')`,
+			);
+		}
+		return this.db
+			.select()
+			.from(s)
+			.where(where)
+			.orderBy(desc(sql`COALESCE(${s.startedAt}, ${s.createdAt})`), desc(s.createdAt))
+			.limit(limit)
+			.all()
+			.map(toSession);
+	}
+
+	findSessionsByStatus(statuses: readonly SessionStatus[]): Session[] {
+		if (statuses.length === 0) return [];
+		return this.db
+			.select()
+			.from(schema.sessions)
+			.where(inArray(schema.sessions.status, [...statuses]))
+			.all()
+			.map(toSession);
+	}
+
+	deleteSession(id: string): void {
+		this.sqlite.transaction(() => {
+			this.db.delete(schema.analyses).where(eq(schema.analyses.sessionId, id)).run();
+			this.db.delete(schema.transcripts).where(eq(schema.transcripts.sessionId, id)).run();
+			this.db.delete(schema.audioChunks).where(eq(schema.audioChunks.sessionId, id)).run();
+			this.db.delete(schema.sessions).where(eq(schema.sessions.id, id)).run();
+		})();
+	}
+
+	// --- Chunks ---
+
+	addChunk(chunk: AudioChunk): boolean {
+		const result = this.db
 			.insert(schema.audioChunks)
-			.values({
-				id: chunk.id,
-				sessionId: chunk.sessionId,
-				index: chunk.index,
-				path: chunk.path,
-				durationMs: chunk.durationMs,
-				sampleRate: chunk.sampleRate,
-				status: chunk.status,
-			})
+			.values(chunk)
+			.onConflictDoNothing({ target: [schema.audioChunks.sessionId, schema.audioChunks.path] })
 			.run();
+		return result.changes > 0;
 	}
 
-	updateChunk(id: string, data: Partial<AudioChunk>): void {
-		const mapped: Record<string, unknown> = {};
-		if (data.status !== undefined) mapped.status = data.status;
-		if (data.durationMs !== undefined) mapped.durationMs = data.durationMs;
-		this.db.update(schema.audioChunks).set(mapped).where(eq(schema.audioChunks.id, id)).run();
+	updateChunk(id: string, data: Partial<Pick<AudioChunk, "status" | "durationMs">>): void {
+		const values: Partial<Pick<AudioChunk, "status" | "durationMs">> = {};
+		if (data.status !== undefined) values.status = data.status;
+		if (data.durationMs !== undefined) values.durationMs = data.durationMs;
+		if (Object.keys(values).length === 0) return;
+		this.db.update(schema.audioChunks).set(values).where(eq(schema.audioChunks.id, id)).run();
 	}
 
 	getChunks(sessionId: string): AudioChunk[] {
-		const rows = this.db
+		return this.db
 			.select()
 			.from(schema.audioChunks)
 			.where(eq(schema.audioChunks.sessionId, sessionId))
-			.all();
-		return rows.map((row) => ({
-			id: row.id,
-			sessionId: row.sessionId,
-			index: row.index,
-			path: row.path,
-			durationMs: row.durationMs,
-			sampleRate: row.sampleRate,
-			status: row.status as AudioChunk["status"],
-		}));
+			.orderBy(asc(schema.audioChunks.index))
+			.all()
+			.map((row) => ({ ...row, status: row.status as AudioChunk["status"] }));
 	}
 
+	// --- Transcripts ---
+
 	saveTranscript(transcript: Transcript): void {
-		this.db
-			.insert(schema.transcripts)
-			.values({
-				id: transcript.id,
-				sessionId: transcript.sessionId,
-				segmentsJson: JSON.stringify(transcript.segments),
-				fullText: transcript.fullText,
-				language: transcript.language,
-				provider: transcript.provider,
-				model: transcript.model,
-				createdAt: transcript.createdAt,
-			})
-			.run();
+		this.sqlite.transaction(() => {
+			this.db
+				.delete(schema.transcripts)
+				.where(eq(schema.transcripts.sessionId, transcript.sessionId))
+				.run();
+			this.db
+				.insert(schema.transcripts)
+				.values({
+					id: transcript.id,
+					sessionId: transcript.sessionId,
+					segmentsJson: JSON.stringify(transcript.segments),
+					fullText: transcript.fullText,
+					language: transcript.language,
+					provider: transcript.provider,
+					model: transcript.model,
+					createdAt: transcript.createdAt,
+				})
+				.run();
+		})();
 	}
 
 	getTranscript(sessionId: string): Transcript | null {
@@ -234,6 +251,7 @@ export class SQLiteRepository implements SessionRepository {
 			.select()
 			.from(schema.transcripts)
 			.where(eq(schema.transcripts.sessionId, sessionId))
+			.orderBy(desc(schema.transcripts.createdAt))
 			.get();
 		if (!row) return null;
 		return {
@@ -248,121 +266,93 @@ export class SQLiteRepository implements SessionRepository {
 		};
 	}
 
+	// --- Analyses ---
+
 	saveAnalysis(analysis: Analysis): void {
-		this.db
-			.insert(schema.analyses)
-			.values({
-				id: analysis.id,
-				sessionId: analysis.sessionId,
-				templateId: analysis.templateId,
-				provider: analysis.provider,
-				model: analysis.model,
-				content: analysis.content,
-				createdAt: analysis.createdAt,
-			})
-			.run();
+		this.db.insert(schema.analyses).values(analysis).run();
 	}
 
 	getAnalyses(sessionId: string): Analysis[] {
-		const rows = this.db
+		return this.db
 			.select()
 			.from(schema.analyses)
 			.where(eq(schema.analyses.sessionId, sessionId))
-			.all();
-		return rows.map((row) => ({
-			id: row.id,
-			sessionId: row.sessionId,
-			templateId: row.templateId,
-			provider: row.provider,
-			model: row.model,
-			content: row.content ?? "",
-			createdAt: row.createdAt,
-		}));
+			.orderBy(asc(schema.analyses.createdAt))
+			.all()
+			.map((row) => ({ ...row, content: row.content ?? "" }));
 	}
 
-	deleteAnalysis(id: string): void {
-		this.db.delete(schema.analyses).where(eq(schema.analyses.id, id)).run();
+	countAnalyses(sessionId: string): number {
+		const row = this.db
+			.select({ n: count() })
+			.from(schema.analyses)
+			.where(eq(schema.analyses.sessionId, sessionId))
+			.get();
+		return row?.n ?? 0;
 	}
 
-	deleteSession(id: string): void {
-		this.db.delete(schema.analyses).where(eq(schema.analyses.sessionId, id)).run();
-		this.db.delete(schema.transcripts).where(eq(schema.transcripts.sessionId, id)).run();
-		this.db.delete(schema.audioChunks).where(eq(schema.audioChunks.sessionId, id)).run();
-		this.db.delete(schema.sessions).where(eq(schema.sessions.id, id)).run();
+	deleteAnalysis(id: string): boolean {
+		return this.db.delete(schema.analyses).where(eq(schema.analyses.id, id)).run().changes > 0;
 	}
 
-	// --- Template CRUD ---
+	// --- Templates (built-ins from code + custom rows) ---
 
 	listTemplates(): AnalysisTemplate[] {
-		const rows = this.db.select().from(schema.analysisTemplates).all();
-		return rows.map((row) => ({
-			id: row.id,
-			name: row.name,
-			userPromptTemplate: row.userPromptTemplate,
-			builtin: row.builtin === 1,
-			createdAt: row.createdAt,
-			updatedAt: row.updatedAt,
-		}));
+		const custom = this.db
+			.select()
+			.from(schema.analysisTemplates)
+			.orderBy(asc(schema.analysisTemplates.createdAt))
+			.all()
+			.map(toTemplate);
+		return [...BUILTIN_TEMPLATES.map((t) => ({ ...t })), ...custom];
 	}
 
-	getTemplate(id: string): AnalysisTemplate | undefined {
+	getTemplate(id: string): AnalysisTemplate | null {
+		const builtin = getBuiltinTemplate(id);
+		if (builtin) return { ...builtin };
 		const row = this.db
 			.select()
 			.from(schema.analysisTemplates)
 			.where(eq(schema.analysisTemplates.id, id))
 			.get();
-		if (!row) return undefined;
-		return {
-			id: row.id,
-			name: row.name,
-			userPromptTemplate: row.userPromptTemplate,
-			builtin: row.builtin === 1,
-			createdAt: row.createdAt,
-			updatedAt: row.updatedAt,
+		return row ? toTemplate(row) : null;
+	}
+
+	createTemplate(data: NewTemplate): AnalysisTemplate {
+		const input = normalizeTemplateInput({ ...data, description: data.description ?? "" });
+		const now = new Date().toISOString();
+		const row: TemplateRow = {
+			id: `custom-${randomUUID().slice(0, 8)}`,
+			name: input.name,
+			description: input.description,
+			prompt: input.prompt,
+			createdAt: now,
+			updatedAt: now,
 		};
+		this.db.insert(schema.analysisTemplates).values(row).run();
+		return toTemplate(row);
 	}
 
-	createTemplate(
-		data: Pick<AnalysisTemplate, "id" | "name" | "userPromptTemplate">,
-	): AnalysisTemplate {
-		const now = new Date().toISOString();
-		this.db
-			.insert(schema.analysisTemplates)
-			.values({
-				id: data.id,
-				name: data.name,
-				userPromptTemplate: data.userPromptTemplate,
-				builtin: 0,
-				createdAt: now,
-				updatedAt: now,
-			})
-			.run();
-		return { ...data, builtin: false, createdAt: now, updatedAt: now };
-	}
-
-	updateTemplate(
-		id: string,
-		data: Partial<Pick<AnalysisTemplate, "name" | "userPromptTemplate">>,
-	): AnalysisTemplate | undefined {
-		const existing = this.getTemplate(id);
-		if (!existing) return undefined;
-		const now = new Date().toISOString();
-		const mapped: Record<string, unknown> = { updatedAt: now };
-		if (data.name !== undefined) mapped.name = data.name;
-		if (data.userPromptTemplate !== undefined) mapped.userPromptTemplate = data.userPromptTemplate;
-		this.db
+	updateTemplate(id: string, data: Partial<NewTemplate>): AnalysisTemplate {
+		if (getBuiltinTemplate(id)) throw new ValidationError(BUILTIN_READ_ONLY);
+		const input = normalizeTemplateInput(data);
+		const changes = this.db
 			.update(schema.analysisTemplates)
-			.set(mapped)
+			.set({ ...input, updatedAt: new Date().toISOString() })
 			.where(eq(schema.analysisTemplates.id, id))
-			.run();
-		return this.getTemplate(id);
+			.run().changes;
+		if (changes === 0) throw new NotFoundError("Template não encontrado.");
+		return this.getTemplate(id) as AnalysisTemplate;
 	}
 
-	deleteTemplate(id: string): boolean {
-		const existing = this.getTemplate(id);
-		if (!existing) return false;
-		if (existing.builtin) return false;
-		this.db.delete(schema.analysisTemplates).where(eq(schema.analysisTemplates.id, id)).run();
-		return true;
+	deleteTemplate(id: string): void {
+		if (getBuiltinTemplate(id)) {
+			throw new ValidationError("Templates padrão não podem ser apagados.");
+		}
+		const changes = this.db
+			.delete(schema.analysisTemplates)
+			.where(eq(schema.analysisTemplates.id, id))
+			.run().changes;
+		if (changes === 0) throw new NotFoundError("Template não encontrado.");
 	}
 }

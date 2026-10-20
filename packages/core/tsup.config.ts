@@ -1,7 +1,8 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-	entry: ["src/index.ts"],
+	// `shared` is the browser-safe subpath (`@listening-resume/core/shared`).
+	entry: ["src/index.ts", "src/shared.ts"],
 	format: ["esm"],
 	target: "node20",
 	outDir: "dist",
@@ -14,11 +15,9 @@ export default defineConfig({
 		"chalk",
 		"dotenv",
 		"drizzle-orm",
-		"fluent-ffmpeg",
 		"groq-sdk",
 		"ollama",
 		"smol-toml",
-		"uuid",
 		"zod",
 	],
 });

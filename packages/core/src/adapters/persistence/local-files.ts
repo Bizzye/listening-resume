@@ -1,13 +1,11 @@
+import { existsSync, statSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { FileStoragePort } from "../../ports/file-storage.js";
 
+/** Session files under `<dataDir>/sessions/<id>/`. */
 export class LocalFileStorage implements FileStoragePort {
-	private baseDir: string;
-
-	constructor(baseDir: string) {
-		this.baseDir = baseDir;
-	}
+	constructor(private readonly baseDir: string) {}
 
 	async ensureDir(dirPath: string): Promise<void> {
 		await fs.mkdir(dirPath, { recursive: true });
@@ -17,38 +15,40 @@ export class LocalFileStorage implements FileStoragePort {
 		return path.join(this.baseDir, "sessions", sessionId);
 	}
 
-	getChunkPath(sessionId: string, index: number): string {
-		return path.join(
-			this.getSessionDir(sessionId),
-			"audio",
-			`chunk_${String(index).padStart(4, "0")}.wav`,
-		);
+	getAudioDir(sessionId: string): string {
+		return path.join(this.getSessionDir(sessionId), "audio");
 	}
 
-	async writeText(filePath: string, content: string): Promise<void> {
-		await fs.mkdir(path.dirname(filePath), { recursive: true });
-		await fs.writeFile(filePath, content, "utf-8");
-	}
-
-	async writeJson(filePath: string, data: unknown): Promise<void> {
-		await this.writeText(filePath, JSON.stringify(data, null, 2));
-	}
-
-	async readText(filePath: string): Promise<string> {
-		return fs.readFile(filePath, "utf-8");
-	}
-
-	async readJson<T>(filePath: string): Promise<T> {
-		const content = await this.readText(filePath);
-		return JSON.parse(content) as T;
-	}
-
-	async exists(filePath: string): Promise<boolean> {
+	async listAudioFiles(sessionId: string): Promise<string[]> {
+		const dir = this.getAudioDir(sessionId);
 		try {
-			await fs.access(filePath);
-			return true;
+			const names = await fs.readdir(dir);
+			return names
+				.filter((n) => n.toLowerCase().endsWith(".wav"))
+				.sort()
+				.map((n) => path.join(dir, n));
 		} catch {
-			return false;
+			return [];
+		}
+	}
+
+	async removeSessionDir(sessionId: string): Promise<void> {
+		await fs.rm(this.getSessionDir(sessionId), { recursive: true, force: true });
+	}
+
+	exists(filePath: string): boolean {
+		return existsSync(filePath);
+	}
+
+	async removeFile(filePath: string): Promise<void> {
+		await fs.rm(filePath, { force: true });
+	}
+
+	modifiedAt(filePath: string): number | null {
+		try {
+			return statSync(filePath).mtimeMs;
+		} catch {
+			return null;
 		}
 	}
 }

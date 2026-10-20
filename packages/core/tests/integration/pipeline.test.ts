@@ -1,248 +1,157 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { v4 as uuid } from "uuid";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { FakeCaptureAdapter } from "../../src/adapters/audio/fake-capture.js";
+import { buildExportDocument } from "../../src/adapters/export/export-document.js";
 import { MarkdownExporter } from "../../src/adapters/export/markdown.js";
+import { FakeAnalyzer } from "../../src/adapters/fake/fake-analyzer.js";
+import { FakeTranscriber } from "../../src/adapters/fake/fake-transcriber.js";
 import { LocalFileStorage } from "../../src/adapters/persistence/local-files.js";
 import { SQLiteRepository } from "../../src/adapters/persistence/sqlite.js";
 import { AnalysisService } from "../../src/application/analysis.service.js";
+import { RecordingService } from "../../src/application/recording.service.js";
 import { TranscriptionService } from "../../src/application/transcription.service.js";
-import type { AudioChunk, Session } from "../../src/domain/models.js";
-import type { AnalyzeResult, AnalyzerPort } from "../../src/ports/analyzer.js";
-import type { TranscribeResult, TranscriberPort } from "../../src/ports/transcriber.js";
-import { getTemplate } from "../../src/templates/index.js";
+import type { AnalysisTemplate } from "../../src/domain/models.js";
+import { buildTranscriptPreview } from "../../src/domain/transcript.js";
+import { BUILTIN_TEMPLATES, parseFlashcards } from "../../src/templates/index.js";
+import { totalWavDurationSec } from "../../src/utils/wav.js";
+import { backdateFiles, makeTempDir } from "../helpers.js";
 
-const TEST_DIR = path.join(os.tmpdir(), `lr-integration-${Date.now()}`);
-const DB_PATH = path.join(TEST_DIR, "test.db");
-
-function createMockTranscriber(): TranscriberPort {
-	return {
-		provider: "mock",
-		model: "mock-v1",
-		async transcribe(_audioPath: string): Promise<TranscribeResult> {
-			return {
-				segments: [
-					{ start: 0, end: 5, text: "Hello world from chunk." },
-					{ start: 5, end: 10, text: "This is a test recording." },
-				],
-				fullText: "Hello world from chunk. This is a test recording.",
-				language: "en",
-				duration: 10,
-			};
-		},
-	};
-}
-
-function createMockAnalyzer(available = true): AnalyzerPort {
-	return {
-		provider: "mock",
-		model: "mock-analysis-v1",
-		async analyze(options): Promise<AnalyzeResult> {
-			return {
-				content: `## Summary\n\nThis is a summary of: ${options.transcript.slice(0, 50)}...`,
-				model: "mock-analysis-v1",
-				provider: "mock",
-				tokensUsed: 100,
-			};
-		},
-		async isAvailable(): Promise<boolean> {
-			return available;
-		},
-	};
-}
-
-describe("Full Pipeline Integration", () => {
+describe("pipeline: record → transcribe → analyze → export (fakes, file-backed sqlite)", () => {
+	let dir: string;
+	let cleanup: () => void;
+	let dbPath: string;
 	let repo: SQLiteRepository;
-	let _storage: LocalFileStorage;
 
 	beforeEach(() => {
-		fs.mkdirSync(TEST_DIR, { recursive: true });
-		repo = new SQLiteRepository(DB_PATH);
-		_storage = new LocalFileStorage(TEST_DIR);
+		({ dir, cleanup } = makeTempDir("lr-pipeline-"));
+		dbPath = path.join(dir, "listening-resume.db");
+		repo = new SQLiteRepository(dbPath);
 	});
-
 	afterEach(() => {
 		repo.close();
-		fs.rmSync(TEST_DIR, { recursive: true, force: true });
+		cleanup();
 	});
 
-	it("record → transcribe → analyze → export", async () => {
-		// 1. Simulate a recording session (manually create session + chunks)
-		const sessionId = uuid();
-		const session: Session = {
-			id: sessionId,
-			title: null,
-			status: "recording",
-			startedAt: new Date().toISOString(),
-			endedAt: null,
-			audioSource: "test-device.monitor",
-			language: "en",
-			createdAt: new Date().toISOString(),
-		};
-		repo.createSession(session);
+	it("produces a complete, persisted and exportable session", async () => {
+		const storage = new LocalFileStorage(dir);
+		const capture = new FakeCaptureAdapter({ realtime: false });
+		const recording = new RecordingService({
+			capture,
+			repo,
+			storage,
+			audio: { sampleRate: 16000, channels: 1, chunkSeconds: 20, micVolume: 1.2 },
+		});
 
-		// Create fake audio chunks
-		const chunkDir = path.join(TEST_DIR, "chunks", sessionId);
-		fs.mkdirSync(chunkDir, { recursive: true });
+		// 1. Record 50 s with a live mic swap and a muted stretch.
+		const session = await recording.start({
+			devices: { system: "@default", mic: "@default" },
+			title: "Reunião semanal",
+		});
+		capture.advance(15);
+		await recording.switchDevices({ mic: "Microfone (USB Audio Device)" });
+		await recording.setMute("system", true);
+		capture.advance(15);
+		await recording.setMute("system", false);
+		capture.advance(20);
+		const { chunks } = await recording.stop();
+		expect(chunks).toBe(3);
+		const files = await storage.listAudioFiles(session.id);
+		expect(files.map((f) => path.basename(f))).toEqual([
+			"chunk_0000.wav",
+			"chunk_0001.wav",
+			"chunk_0002.wav",
+		]);
+		expect(totalWavDurationSec(files)).toBeCloseTo(50, 3);
 
-		const chunks: AudioChunk[] = [];
-		for (let i = 0; i < 3; i++) {
-			const chunkPath = path.join(chunkDir, `chunk-${i}.wav`);
-			fs.writeFileSync(chunkPath, Buffer.alloc(1024)); // fake audio data
-			const chunk: AudioChunk = {
-				id: uuid(),
-				sessionId,
-				index: i,
-				path: chunkPath,
-				durationMs: 30000,
-				sampleRate: 16000,
-				status: "recorded",
-			};
-			repo.addChunk(chunk);
-			chunks.push(chunk);
+		// 2. Transcribe (Groq-like, rate limited).
+		const transcription = new TranscriptionService(
+			new FakeTranscriber({ rateLimited: true, segmentsPerChunk: 4 }),
+			repo,
+			{ requestsPerMinute: 18, audioSecondsPerHour: 7000 },
+		);
+		const transcript = await transcription.transcribeSession(session.id);
+		expect(transcript.segments).toHaveLength(12);
+		expect(transcript.segments.at(-1)?.end).toBeCloseTo(50, 3);
+		expect(buildTranscriptPreview(transcript)).toMatch(/^Bom dia, pessoal\./);
+
+		// 3. Analyze with every built-in template (+ a custom one).
+		const analysis = new AnalysisService(
+			new FakeAnalyzer({ available: false }),
+			new FakeAnalyzer(),
+			repo,
+		);
+		const custom = repo.createTemplate({
+			name: "Revisão de Entrevista",
+			description: "Avaliação por competência",
+			prompt: "Avalie o candidato por competência.",
+		});
+		const templates: AnalysisTemplate[] = [...BUILTIN_TEMPLATES, custom];
+		for (const template of templates) {
+			await analysis.analyzeSession(session.id, template);
 		}
+		const flashcards = repo.getAnalyses(session.id).find((a) => a.templateId === "flashcards-anki");
+		expect(parseFlashcards(flashcards?.content ?? "").length).toBeGreaterThanOrEqual(8);
 
-		// Stop recording
-		repo.updateSession(sessionId, {
-			status: "stopped",
-			endedAt: new Date().toISOString(),
+		// 4. Reopen the database: everything is persisted.
+		repo.close();
+		repo = new SQLiteRepository(dbPath);
+		const stored = repo.findSessionByIdPrefix(session.id.slice(0, 8));
+		expect(stored).toMatchObject({
+			status: "completed",
+			title: "Reunião semanal",
+			lastError: null,
 		});
+		expect(repo.countAnalyses(session.id)).toBe(templates.length);
+		expect(repo.listSessions({ query: "cronograma" }).map((s) => s.id)).toEqual([session.id]);
 
-		// 2. Transcribe
-		const transcriber = createMockTranscriber();
-		const transcriptionService = new TranscriptionService(transcriber, repo, {
-			requestsPerMinute: 20,
-			audioSecondsPerHour: 28800,
-		});
-
-		const transcript = await transcriptionService.transcribeSession(sessionId, "en");
-
-		expect(transcript.segments.length).toBe(6); // 2 segments × 3 chunks
-		expect(transcript.fullText).toContain("Hello world");
-		expect(transcript.language).toBe("en");
-
-		// Verify saved in DB
-		const savedTranscript = repo.getTranscript(sessionId);
-		expect(savedTranscript).not.toBeNull();
-		expect(savedTranscript?.segments.length).toBe(6);
-
-		// 3. Analyze
-		const analyzer = createMockAnalyzer(true);
-		const analysisService = new AnalysisService(analyzer, null, repo);
-
-		const template = getTemplate("meeting-summary")!;
-		const analysis = await analysisService.analyzeSession(sessionId, template);
-
-		expect(analysis.content).toContain("## Summary");
-		expect(analysis.provider).toBe("mock");
-
-		// Verify saved in DB
-		const savedAnalyses = repo.getAnalyses(sessionId);
-		expect(savedAnalyses.length).toBe(1);
-		expect(savedAnalyses[0].templateId).toBe("meeting-summary");
-
-		// 4. Export
-		const updatedSession = repo.getSession(sessionId)!;
-		const exporter = new MarkdownExporter();
-		const markdown = await exporter.export({
-			session: updatedSession,
-			transcript: savedTranscript,
-			analyses: savedAnalyses,
-		});
-
-		expect(markdown).toContain("# Session");
-		expect(markdown).toContain("Hello world");
-		expect(markdown).toContain("## Summary");
+		// 5. Export.
+		const data = {
+			session: stored ?? session,
+			transcript: repo.getTranscript(session.id),
+			analyses: repo.getAnalyses(session.id),
+			templates: repo.listTemplates(),
+			durationSec: totalWavDurationSec(files),
+		};
+		const doc = buildExportDocument(data);
+		expect(doc.analyses.map((a) => a.heading)).toEqual(templates.map((t) => t.name));
+		const md = await new MarkdownExporter().export(data);
+		expect(md).toContain("# Reunião semanal");
+		expect(md).toContain("**Duração:** 50 s");
+		expect(md).toContain("## Ata de Reunião");
+		expect(md).toContain("| Pergunta | Resposta |");
+		expect(md).toContain("**[0:00]** Bom dia, pessoal.");
+		const out = path.join(dir, `${doc.fileBaseName}.md`);
+		fs.writeFileSync(out, md);
+		expect(fs.existsSync(out)).toBe(true);
 	});
 
-	it("analysis fallback works when primary is unavailable", async () => {
-		const sessionId = uuid();
-		repo.createSession({
-			id: sessionId,
-			title: null,
-			status: "stopped",
-			startedAt: new Date().toISOString(),
-			endedAt: new Date().toISOString(),
-			audioSource: "test",
-			language: "en",
-			createdAt: new Date().toISOString(),
+	it("recovers after a crash on the next boot and can resume the pipeline", async () => {
+		const storage = new LocalFileStorage(dir);
+		const capture = new FakeCaptureAdapter({ realtime: false });
+		const audio = { sampleRate: 16000, channels: 1, chunkSeconds: 10 };
+		const first = new RecordingService({ capture, repo, storage, audio });
+		const session = await first.start({ devices: { system: "@default", mic: null } });
+		capture.advance(25); // 2 chunks finalized; the process "dies" before stop()
+		backdateFiles(storage.getAudioDir(session.id)); // the next boot is a while later
+
+		// Next boot: a fresh service over the same database and disk.
+		repo.close();
+		repo = new SQLiteRepository(dbPath);
+		const booted = new RecordingService({
+			capture: new FakeCaptureAdapter({ realtime: false }),
+			repo,
+			storage,
+			audio,
 		});
+		const reconciled = await booted.reconcileInterrupted();
+		expect(reconciled).toEqual([{ sessionId: session.id, from: "recording", to: "stopped" }]);
+		expect(repo.getChunks(session.id)).toHaveLength(2);
 
-		// Create a chunk + transcribe it first
-		const chunkPath = path.join(TEST_DIR, "test-chunk.wav");
-		fs.writeFileSync(chunkPath, Buffer.alloc(512));
-		repo.addChunk({
-			id: uuid(),
-			sessionId,
-			index: 0,
-			path: chunkPath,
-			durationMs: 30000,
-			sampleRate: 16000,
-			status: "recorded",
-		});
-
-		const transcriber = createMockTranscriber();
-		const transcriptionService = new TranscriptionService(transcriber, repo, {
-			requestsPerMinute: 20,
-			audioSecondsPerHour: 28800,
-		});
-		await transcriptionService.transcribeSession(sessionId, "en");
-
-		// Primary analyzer unavailable, fallback available
-		const unavailableAnalyzer = createMockAnalyzer(false);
-		const fallbackAnalyzer = createMockAnalyzer(true);
-		const analysisService = new AnalysisService(unavailableAnalyzer, fallbackAnalyzer, repo);
-
-		const template = getTemplate("meeting-summary")!;
-		const analysis = await analysisService.analyzeSession(sessionId, template);
-
-		expect(analysis.content).toContain("## Summary");
-	});
-
-	it("multiple analyses on same session", async () => {
-		const sessionId = uuid();
-		repo.createSession({
-			id: sessionId,
-			title: null,
-			status: "stopped",
-			startedAt: new Date().toISOString(),
-			endedAt: new Date().toISOString(),
-			audioSource: "test",
-			language: "en",
-			createdAt: new Date().toISOString(),
-		});
-
-		const chunkPath = path.join(TEST_DIR, "multi-chunk.wav");
-		fs.writeFileSync(chunkPath, Buffer.alloc(512));
-		repo.addChunk({
-			id: uuid(),
-			sessionId,
-			index: 0,
-			path: chunkPath,
-			durationMs: 30000,
-			sampleRate: 16000,
-			status: "recorded",
-		});
-
-		const transcriber = createMockTranscriber();
-		const transcriptionService = new TranscriptionService(transcriber, repo, {
-			requestsPerMinute: 20,
-			audioSecondsPerHour: 28800,
-		});
-		await transcriptionService.transcribeSession(sessionId, "en");
-
-		const analyzer = createMockAnalyzer(true);
-		const analysisService = new AnalysisService(analyzer, null, repo);
-
-		const meetingTemplate = getTemplate("meeting-summary")!;
-		const actionTemplate = getTemplate("action-items")!;
-
-		await analysisService.analyzeSession(sessionId, meetingTemplate);
-		await analysisService.analyzeSession(sessionId, actionTemplate);
-
-		const analyses = repo.getAnalyses(sessionId);
-		expect(analyses.length).toBe(2);
-		expect(analyses.map((a) => a.templateId).sort()).toEqual(["action-items", "meeting-summary"]);
+		const transcript = await new TranscriptionService(new FakeTranscriber(), repo, {
+			requestsPerMinute: 18,
+			audioSecondsPerHour: 7000,
+		}).transcribeSession(session.id);
+		expect(transcript.segments.at(-1)?.end).toBeCloseTo(20, 3);
 	});
 });

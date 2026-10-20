@@ -1,51 +1,43 @@
 import type { ExportData, ExporterPort } from "../../ports/exporter.js";
+import { buildExportDocument, demoteHeadings, type ExportDocument } from "./export-document.js";
 
-export class MarkdownExporter implements ExporterPort {
-	readonly format = "markdown";
+/** Renders an `ExportDocument` as Markdown (Obsidian-friendly). Pure. */
+export function renderMarkdown(doc: ExportDocument): string {
+	const out: string[] = [`# ${doc.title}`, ""];
+	for (const { label, value } of doc.metadata) out.push(`**${label}:** ${value}  `);
+	out.push("");
 
-	async export(data: ExportData): Promise<string> {
-		const lines: string[] = [];
-
-		lines.push(`# ${data.session.title ?? "Session"}`);
-		lines.push("");
-		lines.push(`**Date**: ${data.session.startedAt ?? data.session.createdAt}`);
-		lines.push(`**Status**: ${data.session.status}`);
-		lines.push(`**Source**: ${data.session.audioSource ?? "unknown"}`);
-		lines.push("");
-
-		if (data.transcript) {
-			lines.push("## Transcription");
-			lines.push("");
-
-			for (const segment of data.transcript.segments) {
-				const timestamp = formatTimestamp(segment.start);
-				lines.push(`**[${timestamp}]** ${segment.text}`);
-				lines.push("");
+	for (const analysis of doc.analyses) {
+		out.push(`## ${analysis.heading}`, "");
+		if (analysis.flashcards && analysis.flashcards.length > 0) {
+			out.push("| Pergunta | Resposta |", "| --- | --- |");
+			for (const card of analysis.flashcards) {
+				out.push(`| ${escapeCell(card.front)} | ${escapeCell(card.back)} |`);
 			}
-
-			lines.push("---");
-			lines.push("");
+			out.push("");
+		} else {
+			// Analyses use `##` sections themselves: nest them under the analysis heading.
+			out.push(demoteHeadings(analysis.markdown, 1), "");
 		}
-
-		for (const analysis of data.analyses) {
-			lines.push(`## ${analysis.templateId}`);
-			lines.push("");
-			lines.push(analysis.content);
-			lines.push("");
-			lines.push("---");
-			lines.push("");
-		}
-
-		return lines.join("\n");
+		out.push("---", "");
 	}
+
+	if (doc.transcript) {
+		out.push(`## ${doc.transcript.heading}`, "");
+		for (const seg of doc.transcript.segments) out.push(`**[${seg.timestamp}]** ${seg.text}`, "");
+	}
+
+	return `${out.join("\n").trimEnd()}\n`;
 }
 
-function formatTimestamp(seconds: number): string {
-	const h = Math.floor(seconds / 3600);
-	const m = Math.floor((seconds % 3600) / 60);
-	const s = Math.floor(seconds % 60);
-	if (h > 0) {
-		return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+function escapeCell(text: string): string {
+	return text.replace(/\|/g, "\\|");
+}
+
+export class MarkdownExporter implements ExporterPort {
+	readonly format = "md";
+
+	async export(data: ExportData): Promise<string> {
+		return renderMarkdown(buildExportDocument(data));
 	}
-	return `${m}:${String(s).padStart(2, "0")}`;
 }

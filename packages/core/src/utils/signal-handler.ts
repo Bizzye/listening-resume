@@ -21,7 +21,8 @@ export function setupSignalHandlers(): void {
 				console.error("Cleanup error:", err);
 			}
 		}
-		process.exit(0);
+		// Honors process.exitCode set by the cleanup functions.
+		process.exit();
 	};
 
 	process.on("SIGINT", () => handler("SIGINT"));
