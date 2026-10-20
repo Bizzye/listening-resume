@@ -14,7 +14,7 @@
 		"build:windows": "pnpm --filter @listening-resume/gui build:windows",
 		"lint": "pnpm -r lint",
 		"format": "pnpm -r format",
-		"test:rust": "cargo test --manifest-path apps/gui/src-tauri/Cargo.toml --bin wasapi-capture",
+		"test:rust": "node apps/gui/scripts/ensure-tauri-resources.mjs && cargo test --manifest-path apps/gui/src-tauri/Cargo.toml --bin wasapi-capture",
 		"test:hardware": "pnpm --filter @listening-resume/gui exec playwright test --grep @hardware",
 		"screenshots": "pnpm --filter @listening-resume/gui exec playwright test --grep @screens"
 	},
