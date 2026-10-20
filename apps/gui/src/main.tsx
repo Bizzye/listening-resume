@@ -1,10 +1,25 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
-import "./index.css";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+// Fonts are bundled (not Google Fonts) so the desktop app renders correctly offline.
+import "@fontsource/geist/latin-400.css";
+import "@fontsource/geist/latin-500.css";
+import "@fontsource/geist/latin-600.css";
+import "@fontsource/geist/latin-700.css";
+import "@fontsource/geist-mono/latin-400.css";
+import "@fontsource/geist-mono/latin-500.css";
+import "@fontsource/geist-mono/latin-600.css";
+import "@fontsource/geist-mono/latin-700.css";
+import { App } from "./app/App";
+import "./styles/tokens.css";
+import "./styles/atomics.css";
+import "./styles/design.css";
+import "./styles/app.css";
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
+const root = document.getElementById("root");
+if (!root) throw new Error("#root not found");
+
+createRoot(root).render(
+	<StrictMode>
+		<App />
+	</StrictMode>,
 );

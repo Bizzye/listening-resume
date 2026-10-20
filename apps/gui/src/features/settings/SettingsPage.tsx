@@ -1,451 +1,445 @@
-import { useState, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
+import { type Health, type Settings, SYSTEM_DEFAULT_DEVICE } from "../../shared/api/types";
+import { DeviceSelect } from "../../shared/ui/DeviceSelect";
+import { DirInput, usePickFolder } from "../../shared/ui/DirInput";
+import { Select } from "../../shared/ui/Select";
+import { Switch } from "../../shared/ui/Switch";
 import { useStore } from "../../store";
-import {
-  Headphones,
-  Brain,
-  Mic,
-  Zap,
-  Server,
-  Volume2,
-  Key,
-  FolderOutput,
-} from "lucide-react";
-import { api, BASE } from "../../shared/lib/api";
+
+function Row({
+	label,
+	desc,
+	children,
+	last,
+}: {
+	label: string;
+	desc?: string;
+	children: ReactNode;
+	last?: boolean;
+}) {
+	return (
+		<div className={last ? "set-row last" : "set-row"}>
+			<div>
+				<div className="set-l">{label}</div>
+				{desc ? <div className="set-d">{desc}</div> : null}
+			</div>
+			{children}
+		</div>
+	);
+}
+
+const WHISPER_MODELS = [
+	{ value: "small", label: "small · 466 MB" },
+	{ value: "medium", label: "medium · 1.5 GB" },
+	{ value: "large-v3", label: "large-v3 · 2.9 GB" },
+];
+const LANGUAGES = [
+	{ value: "pt-BR", label: "Português (Brasil)" },
+	{ value: "en", label: "English" },
+];
+const FORMATS = [
+	{ value: "md", label: "Markdown" },
+	{ value: "pdf", label: "PDF" },
+	{ value: "docx", label: "DOCX" },
+];
+
+function AudioSection({ settings }: { settings: Settings }) {
+	const devices = useStore((s) => s.devices);
+	const { updateSettings, playTestSound } = useStore.getState();
+	return (
+		<div className="card set-sec">
+			<div className="set-h">Áudio</div>
+			<Row label="Dispositivo de captura" desc="Fonte do áudio do sistema">
+				<DeviceSelect
+					kind="system"
+					label="Dispositivo de captura"
+					devices={devices}
+					value={settings.systemDevice}
+					onChange={(v) => void updateSettings({ systemDevice: v ?? SYSTEM_DEFAULT_DEVICE })}
+					testId="settings-system-device-select"
+				/>
+			</Row>
+			<Row label="Microfone" desc="Mixado junto com o áudio do sistema">
+				<DeviceSelect
+					kind="mic"
+					label="Microfone"
+					devices={devices}
+					value={settings.micDevice}
+					onChange={(v) => void updateSettings({ micDevice: v })}
+					testId="settings-mic-device-select"
+				/>
+			</Row>
+			<Row label="Detectar silêncio" desc="Avisa quando nenhuma fonte está emitindo som">
+				<Switch
+					checked={settings.silenceDetection}
+					onChange={(v) => void updateSettings({ silenceDetection: v })}
+					label="Detectar silêncio"
+					testId="switch-silence"
+				/>
+			</Row>
+			<Row label="Testar som" desc="Toca um sinal na saída selecionada" last>
+				<button
+					type="button"
+					className="btn2"
+					data-testid="test-sound-button"
+					onClick={() => void playTestSound(settings.systemDevice)}
+				>
+					Testar
+				</button>
+			</Row>
+		</div>
+	);
+}
+
+function TranscriptionSection({ settings }: { settings: Settings }) {
+	const updateSettings = useStore((s) => s.updateSettings);
+	const local = settings.transcriptionProvider === "whisper-cpp";
+	return (
+		<div className="card set-sec">
+			<div className="set-h">Transcrição</div>
+			<div className="grid2" style={{ margin: "10px 0 4px" }}>
+				<button
+					type="button"
+					className={local ? "mode on" : "mode"}
+					aria-pressed={local}
+					data-testid="provider-whisper"
+					onClick={() => void updateSettings({ transcriptionProvider: "whisper-cpp" })}
+				>
+					<div className="fx jb ac">
+						<b>Whisper</b>
+						<span className="bdg st-ok">Grátis</span>
+					</div>
+					<p>whisper.cpp no seu computador. Sem chave de API.</p>
+				</button>
+				<button
+					type="button"
+					className={!local ? "mode on" : "mode"}
+					aria-pressed={!local}
+					data-testid="provider-groq"
+					onClick={() => void updateSettings({ transcriptionProvider: "groq" })}
+				>
+					<div className="fx jb ac">
+						<b>Groq</b>
+						<span className="bdg st-n">BYOK</span>
+					</div>
+					<p>whisper-large-v3-turbo. Rápido; requer chave de API.</p>
+				</button>
+			</div>
+			<Row label="Modelo Whisper" desc="Maior = mais preciso e mais lento">
+				<Select
+					label="Modelo Whisper"
+					value={settings.whisperModel}
+					options={WHISPER_MODELS}
+					onChange={(v) => void updateSettings({ whisperModel: v as Settings["whisperModel"] })}
+					testId="whisper-model-select"
+				/>
+			</Row>
+			<Row
+				label="Transcrever ao parar"
+				desc="Inicia a transcrição automaticamente ao fim da gravação"
+				last
+			>
+				<Switch
+					checked={settings.autoTranscribe}
+					onChange={(v) => void updateSettings({ autoTranscribe: v })}
+					label="Transcrever ao parar"
+					testId="switch-auto-transcribe"
+				/>
+			</Row>
+		</div>
+	);
+}
+
+function GroqKeySection() {
+	const groqKey = useStore((s) => s.groqKey);
+	const { validateGroqKey, removeGroqKey } = useStore.getState();
+	const [draft, setDraft] = useState("");
+	const [show, setShow] = useState(false);
+	const [busy, setBusy] = useState(false);
+
+	const validate = async () => {
+		setBusy(true);
+		try {
+			if (await validateGroqKey(draft.trim() || undefined)) setDraft("");
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	return (
+		<div className="card set-sec">
+			<div className="set-h">Chave de API (Groq)</div>
+			<div className="set-row last" style={{ gap: 12 }}>
+				<input
+					className="inp f1 mono"
+					type={show ? "text" : "password"}
+					autoComplete="off"
+					spellCheck={false}
+					aria-label="Chave de API do Groq"
+					data-testid="groq-key-input"
+					placeholder={
+						groqKey.configured ? (groqKey.masked ?? "Chave configurada") : "Cole sua chave gsk_…"
+					}
+					value={draft}
+					onChange={(e) => setDraft(e.target.value)}
+					onKeyDown={(e) => {
+						if (e.key === "Enter") void validate();
+					}}
+				/>
+				<button
+					type="button"
+					className="btn2"
+					data-testid="groq-key-toggle"
+					onClick={() => setShow((v) => !v)}
+				>
+					{show ? "Ocultar" : "Mostrar"}
+				</button>
+				<button
+					type="button"
+					className="btn2"
+					data-testid="groq-key-validate"
+					disabled={busy || (!draft.trim() && !groqKey.configured)}
+					onClick={() => void validate()}
+				>
+					{draft.trim() ? "Salvar e validar" : "Validar"}
+				</button>
+				{groqKey.configured && !draft ? (
+					<button
+						type="button"
+						className="ghost"
+						style={{ color: "var(--red)" }}
+						data-testid="groq-key-remove"
+						onClick={() => void removeGroqKey()}
+					>
+						Remover
+					</button>
+				) : null}
+			</div>
+		</div>
+	);
+}
+
+function AnalysisSection({ settings }: { settings: Settings }) {
+	const models = useStore((s) => s.analysisModels);
+	const templates = useStore((s) => s.templates);
+	const updateSettings = useStore((s) => s.updateSettings);
+	const modelOpts = (
+		models.includes(settings.analysisModel) ? models : [settings.analysisModel, ...models]
+	).map((m) => ({
+		value: m,
+		label: m,
+	}));
+	const tplOpts = templates.map((t) => ({ value: t.id, label: t.name }));
+	if (!tplOpts.some((o) => o.value === settings.defaultTemplateId))
+		tplOpts.unshift({ value: settings.defaultTemplateId, label: settings.defaultTemplateId });
+	return (
+		<div className="card set-sec">
+			<div className="set-h">Análise</div>
+			<Row
+				label="Modelo"
+				desc={
+					models.length ? "Servido pelo Ollama" : "Servido pelo Ollama (nenhum modelo encontrado)"
+				}
+			>
+				<Select
+					label="Modelo de análise"
+					value={settings.analysisModel}
+					options={modelOpts}
+					onChange={(v) => void updateSettings({ analysisModel: v })}
+					testId="analysis-model-select"
+				/>
+			</Row>
+			<Row label="Template padrão" desc="Pré-selecionado ao gerar uma análise">
+				<Select
+					label="Template padrão"
+					value={settings.defaultTemplateId}
+					options={tplOpts}
+					onChange={(v) => void updateSettings({ defaultTemplateId: v })}
+					testId="default-template-select"
+				/>
+			</Row>
+			<Row label="Idioma das análises" last>
+				<Select
+					label="Idioma das análises"
+					value={settings.analysisLanguage}
+					options={LANGUAGES}
+					onChange={(v) =>
+						void updateSettings({ analysisLanguage: v as Settings["analysisLanguage"] })
+					}
+					testId="analysis-language-select"
+				/>
+			</Row>
+		</div>
+	);
+}
+
+function ExportSection({ settings }: { settings: Settings }) {
+	const updateSettings = useStore((s) => s.updateSettings);
+	const pop = useStore((s) => s.pop);
+	const folder = usePickFolder();
+	return (
+		<div className="card set-sec">
+			<div className="set-h">Export</div>
+			<div className="set-row" style={{ gap: 12 }}>
+				<div style={{ flex: "none" }}>
+					<div className="set-l">Pasta padrão</div>
+					<div className="set-d">
+						Usada por todas as sessões, a menos que uma sessão defina a sua
+					</div>
+				</div>
+				<div style={{ display: "flex", gap: 8, flex: 1, maxWidth: 460 }}>
+					<DirInput
+						value={settings.exportDir}
+						label="Pasta padrão de export"
+						testId="export-dir-global-input"
+						inputRef={folder.ref}
+						onCommit={async (v) => {
+							if (await updateSettings({ exportDir: v })) pop(`Pasta padrão: ${v}`, "ac");
+						}}
+					/>
+					<button
+						type="button"
+						className="btn2"
+						style={{ padding: "8px 12px" }}
+						onClick={folder.pick}
+					>
+						Escolher pasta…
+					</button>
+				</div>
+			</div>
+			<Row label="Formato padrão" last>
+				<Select
+					label="Formato padrão"
+					value={settings.exportFormat}
+					options={FORMATS}
+					onChange={(v) => void updateSettings({ exportFormat: v as Settings["exportFormat"] })}
+					testId="export-format-select"
+				/>
+			</Row>
+		</div>
+	);
+}
+
+export interface ServiceRow {
+	key: string;
+	label: string;
+	detail: string;
+	tone: "ok" | "err" | "amb";
+}
+
+/** Groq row detail: "conectado" after a successful validation in this run. */
+export function groqStatus(
+	configured: boolean,
+	validated: boolean,
+): Pick<ServiceRow, "detail" | "tone"> {
+	if (!configured) return { detail: "sem chave", tone: "amb" };
+	return validated
+		? { detail: "conectado", tone: "ok" }
+		: { detail: "chave não validada", tone: "amb" };
+}
+
+export function serviceRows(
+	health: Health | null,
+	settings: Settings,
+	groqValidated = false,
+): ServiceRow[] {
+	if (!health)
+		return [{ key: "server", label: "Serviço local", detail: "indisponível", tone: "err" }];
+	const s = health.services;
+	let port = "";
+	try {
+		port = new URL(s.ollama.url).port;
+	} catch {
+		// keep empty
+	}
+	return [
+		{
+			key: "ollama",
+			label: `Ollama · ${settings.analysisModel || s.ollama.model}`,
+			detail: s.ollama.ok ? `conectado${port ? ` · :${port}` : ""}` : "offline",
+			tone: s.ollama.ok ? "ok" : "err",
+		},
+		{
+			key: "whisper",
+			label: `Whisper · ${s.whisper.model}`,
+			detail: s.whisper.ok ? "pronto" : "indisponível",
+			tone: s.whisper.ok ? "ok" : settings.transcriptionProvider === "whisper-cpp" ? "err" : "amb",
+		},
+		{
+			key: "ffmpeg",
+			label: "FFmpeg",
+			detail: s.ffmpeg.ok ? (s.ffmpeg.version ?? "instalado") : "não encontrado",
+			tone: s.ffmpeg.ok ? "ok" : "err",
+		},
+		{
+			key: "capture",
+			label: `Captura de áudio · ${s.capture.backend}`,
+			detail: s.capture.ok ? "pronta" : "indisponível",
+			tone: s.capture.ok ? "ok" : "err",
+		},
+		{ key: "groq", label: "Groq API", ...groqStatus(s.groq.configured, groqValidated) },
+	];
+}
+
+function StatusSection({ settings }: { settings: Settings }) {
+	const health = useStore((s) => s.health);
+	const groqValidated = useStore((s) => s.groqValidated);
+	const rows = serviceRows(health, settings, groqValidated);
+	return (
+		<div className="card set-sec" data-testid="service-status">
+			<div className="set-h">Status dos serviços</div>
+			{rows.map((r, i) => (
+				<div
+					key={r.key}
+					className={i === rows.length - 1 ? "set-row last" : "set-row"}
+					data-testid={`service-${r.key}`}
+				>
+					<span className="stt">
+						<span
+							className={r.tone === "amb" ? "tdot" : `tdot k-${r.tone}`}
+							style={r.tone === "amb" ? { background: "var(--amb)" } : undefined}
+						/>
+						{r.label}
+					</span>
+					<span className="hint mono">{r.detail}</span>
+				</div>
+			))}
+		</div>
+	);
+}
 
 export function SettingsPage() {
-  const {
-    config,
-    devices,
-    selectedDevice,
-    setSelectedDevice,
-    selectedMicDevice,
-    setSelectedMicDevice,
-    templates,
-    fetchConfig,
-    fetchDevices,
-    setView,
-  } = useStore();
-
-  // Re-fetch devices when opening Settings — recovers if the initial app-load
-  // fetch failed (e.g. raced a dev server restart) and left the list empty.
-  useEffect(() => {
-    if (devices.length === 0) fetchDevices();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<"idle" | "success" | "error">(
-    "idle",
-  );
-  const [groqKey, setGroqKey] = useState("");
-  const [keySaving, setKeySaving] = useState(false);
-  const [keyStatus, setKeyStatus] = useState<
-    "idle" | "saved" | "error" | "invalid"
-  >("idle");
-  const [exportDir, setExportDir] = useState(config.exportDir || "");
-  const [exportDirStatus, setExportDirStatus] = useState<
-    "idle" | "saved" | "error"
-  >("idle");
-
-  const testAudio = async () => {
-    const device = selectedDevice || devices[0]?.id;
-    if (!device) return;
-
-    setTesting(true);
-    setTestResult("idle");
-
-    try {
-      const res = await fetch(`${BASE}/audio/test`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ device }),
-      });
-
-      if (!res.ok) {
-        setTestResult("error");
-      } else {
-        setTestResult("success");
-        setTimeout(() => setTestResult("idle"), 4000);
-      }
-    } catch {
-      setTestResult("error");
-    }
-    setTesting(false);
-  };
-
-  return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6">
-      <h1 className="text-xl font-semibold text-text-primary">Settings</h1>
-
-      {/* Audio */}
-      <SettingsSection title="Audio" icon={Headphones}>
-        <div className="px-4 py-3">
-          <label className="text-sm text-text-secondary block mb-2">
-            Recording Device
-          </label>
-          <select
-            value={selectedDevice ?? ""}
-            onChange={(e) => setSelectedDevice(e.target.value)}
-            aria-label="Recording device"
-            data-testid="recording-device-select"
-            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-accent/50 cursor-pointer [color-scheme:dark]"
-          >
-            {devices
-              .filter((d) => d.type !== "microphone")
-              .map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} {d.isDefault ? "(default)" : ""}
-                </option>
-              ))}
-            {devices.length === 0 && (
-              <option value="">Loading devices...</option>
-            )}
-          </select>
-          {config.device && (
-            <p className="text-xs text-text-muted mt-1">
-              Config default: {config.device}
-            </p>
-          )}
-          <button
-            onClick={testAudio}
-            disabled={testing}
-            data-testid="test-sound-button"
-            className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Volume2 className="w-4 h-4" />
-            {testing ? "Playing..." : "Test Sound"}
-          </button>
-          {testResult === "success" && (
-            <p data-testid="test-sound-result" className="text-xs text-success mt-1">
-              Sound played — if you heard it, this device is correct.
-            </p>
-          )}
-          {testResult === "error" && (
-            <p data-testid="test-sound-result" className="text-xs text-recording mt-1">
-              Failed to play test sound.
-            </p>
-          )}
-
-          <label className="text-sm text-text-secondary block mb-2 mt-4">
-            Microphone (optional)
-          </label>
-          <select
-            value={selectedMicDevice ?? ""}
-            onChange={(e) => setSelectedMicDevice(e.target.value || null)}
-            aria-label="Microphone device"
-            data-testid="mic-device-select"
-            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-accent/50 cursor-pointer [color-scheme:dark]"
-          >
-            <option value="">Nenhum (somente áudio do sistema)</option>
-            {devices
-              .filter((d) => d.type === "microphone")
-              .map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} {d.isDefault ? "(default)" : ""}
-                </option>
-              ))}
-          </select>
-          <p className="text-xs text-text-muted mt-1">
-            Se selecionado, seu microfone será mixado com o áudio do sistema na gravação.
-          </p>
-        </div>
-      </SettingsSection>
-
-      {/* Transcription */}
-      <SettingsSection title="Transcription" icon={Mic}>
-        <SettingRow
-          label="Provider"
-          value={config.transcriptionProvider || "—"}
-        />
-        <SettingRow label="Model" value={config.transcriptionModel || "—"} />
-        <SettingRow
-          label="Groq API Key"
-          value={config.hasGroqKey ? "✓ Configurada" : "✗ Não configurada"}
-        />
-      </SettingsSection>
-
-      {/* Groq API Key */}
-      <SettingsSection title="Groq API Key" icon={Key}>
-        <div className="px-4 py-3">
-          {config.hasGroqKey ? (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="flex-1 bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary font-mono select-all">
-                  {config.maskedGroqKey}
-                </span>
-                <button
-                  onClick={async () => {
-                    setKeySaving(true);
-                    try {
-                      await api.deleteGroqKey();
-                      await fetchConfig();
-                      setKeyStatus("idle");
-                    } catch {
-                      setKeyStatus("error");
-                    }
-                    setKeySaving(false);
-                  }}
-                  disabled={keySaving}
-                  className="px-4 py-2 rounded-lg bg-recording/10 border border-recording/30 text-recording text-sm font-medium hover:bg-recording/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {keySaving ? "Apagando..." : "Apagar"}
-                </button>
-              </div>
-              {keyStatus === "error" && (
-                <p className="text-xs text-recording mt-1">
-                  Erro ao apagar a chave.
-                </p>
-              )}
-            </>
-          ) : (
-            <>
-              <label className="text-sm text-text-secondary block mb-2">
-                Insira sua chave da API Groq:
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  value={groqKey}
-                  onChange={(e) => setGroqKey(e.target.value)}
-                  placeholder="gsk_..."
-                  className="flex-1 bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-accent/50 font-mono"
-                />
-                <button
-                  onClick={async () => {
-                    if (!groqKey.trim()) return;
-                    setKeySaving(true);
-                    setKeyStatus("idle");
-                    try {
-                      const trimmed = groqKey.trim();
-                      if (!trimmed.match(/^gsk_[a-zA-Z0-9]{20,}$/)) {
-                        setKeyStatus("invalid");
-                        setKeySaving(false);
-                        return;
-                      }
-                      await api.setGroqKey(trimmed);
-                      setKeyStatus("saved");
-                      setGroqKey("");
-                      await fetchConfig();
-                      setTimeout(() => setKeyStatus("idle"), 3000);
-                    } catch {
-                      setKeyStatus("error");
-                    }
-                    setKeySaving(false);
-                  }}
-                  disabled={keySaving || !groqKey.trim()}
-                  className="px-4 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {keySaving ? "Salvando..." : "Salvar"}
-                </button>
-              </div>
-              {keyStatus === "saved" && (
-                <p className="text-xs text-success mt-1">
-                  Chave salva com sucesso!
-                </p>
-              )}
-              {keyStatus === "invalid" && (
-                <p className="text-xs text-recording mt-1">
-                  Formato inválido. A chave deve começar com gsk_
-                </p>
-              )}
-              {keyStatus === "error" && (
-                <p className="text-xs text-recording mt-1">
-                  Erro ao salvar a chave.
-                </p>
-              )}
-            </>
-          )}
-          <p className="text-xs text-text-muted mt-2">
-            Obtenha sua chave em{" "}
-            <a
-              href="https://console.groq.com/keys"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-accent hover:underline"
-            >
-              console.groq.com/keys
-            </a>
-            . Usada para transcrição (Whisper) e como fallback de análise.
-          </p>
-        </div>
-      </SettingsSection>
-
-      {/* Analysis */}
-      <SettingsSection title="Analysis" icon={Brain}>
-        <SettingRow label="Provider" value={config.analysisProvider || "—"} />
-        <SettingRow label="Model" value={config.analysisModel || "—"} />
-        <div className="px-4 py-3">
-          <label className="text-sm text-text-secondary block mb-2">
-            Templates de análise
-          </label>
-          <div className="space-y-1.5">
-            {templates.slice(0, 3).map((t) => (
-              <div
-                key={t.id}
-                className="flex items-center gap-2 text-sm text-text-primary"
-              >
-                <span className="truncate">{t.name}</span>
-                {t.builtin && (
-                  <span className="text-xs bg-accent/10 text-accent px-1.5 py-0.5 rounded">
-                    builtin
-                  </span>
-                )}
-              </div>
-            ))}
-            {templates.length > 3 && (
-              <p className="text-xs text-text-muted">
-                +{templates.length - 3} mais...
-              </p>
-            )}
-            {templates.length === 0 && (
-              <p className="text-xs text-text-muted">
-                Nenhum template configurado.
-              </p>
-            )}
-          </div>
-          <button
-            onClick={() => setView("templates")}
-            className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-all cursor-pointer"
-          >
-            Gerenciar Templates
-          </button>
-        </div>
-      </SettingsSection>
-
-      {/* Export */}
-      <SettingsSection title="Export" icon={FolderOutput}>
-        <div className="px-4 py-3">
-          <label className="text-sm text-text-secondary block mb-2">
-            Export Directory
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={exportDir}
-              onChange={(e) => setExportDir(e.target.value)}
-              placeholder="~/Documents/listening-resume"
-              className="flex-1 bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-accent/50 font-mono"
-            />
-            <button
-              onClick={async () => {
-                if (!exportDir.trim()) return;
-                try {
-                  const res = await fetch(`${BASE}/config/export-dir`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ dir: exportDir.trim() }),
-                  });
-                  if (!res.ok) throw new Error();
-                  setExportDirStatus("saved");
-                  await fetchConfig();
-                  setTimeout(() => setExportDirStatus("idle"), 3000);
-                } catch {
-                  setExportDirStatus("error");
-                  setTimeout(() => setExportDirStatus("idle"), 3000);
-                }
-              }}
-              disabled={!exportDir.trim()}
-              className="px-4 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Salvar
-            </button>
-          </div>
-          {exportDirStatus === "saved" && (
-            <p className="text-xs text-success mt-1">Diretório salvo!</p>
-          )}
-          {exportDirStatus === "error" && (
-            <p className="text-xs text-recording mt-1">
-              Erro ao salvar diretório.
-            </p>
-          )}
-          <p className="text-xs text-text-muted mt-2">
-            Pasta onde os arquivos exportados serão salvos automaticamente.
-          </p>
-        </div>
-      </SettingsSection>
-
-      {/* Status */}
-      <SettingsSection title="Services Status" icon={Server}>
-        <ServiceStatus name="API Server" status="connected" />
-        <ServiceStatus
-          name="Groq API"
-          status={config.hasGroqKey ? "connected" : "disconnected"}
-        />
-        <ServiceStatus name="FFmpeg" status="connected" />
-        <ServiceStatus
-          name={navigator.platform.startsWith("Win") ? "WASAPI" : "PipeWire"}
-          status={devices.length > 0 ? "connected" : "disconnected"}
-        />
-      </SettingsSection>
-
-      {/* Config file hint */}
-      <div className="rounded-xl border border-border bg-surface-elevated p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Zap className="w-4 h-4 text-accent" />
-          <h2 className="text-sm font-medium text-text-primary">
-            Configuration
-          </h2>
-        </div>
-        <p className="text-xs text-text-muted leading-relaxed">
-          Edit{" "}
-          <code className="text-text-secondary">
-            ~/.config/listening-resume/config.toml
-          </code>{" "}
-          to change default settings. Set{" "}
-          <code className="text-text-secondary">GROQ_API_KEY</code> in{" "}
-          <code className="text-text-secondary">.env</code> for transcription.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function SettingsSection({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  icon: typeof Brain;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-surface-elevated overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-        <Icon className="w-4 h-4 text-accent" />
-        <h2 className="text-sm font-medium text-text-primary">{title}</h2>
-      </div>
-      <div className="divide-y divide-border">{children}</div>
-    </div>
-  );
-}
-
-function SettingRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between px-4 py-3">
-      <span className="text-sm text-text-secondary">{label}</span>
-      <span className="text-sm text-text-primary font-mono">{value}</span>
-    </div>
-  );
-}
-
-function ServiceStatus({
-  name,
-  status,
-}: {
-  name: string;
-  status: "connected" | "disconnected";
-}) {
-  return (
-    <div className="flex items-center justify-between px-4 py-3">
-      <span className="text-sm text-text-secondary">{name}</span>
-      <div className="flex items-center gap-2">
-        <div
-          className={`w-2 h-2 rounded-full ${
-            status === "connected" ? "bg-success" : "bg-recording"
-          }`}
-        />
-        <span className="text-xs text-text-muted capitalize">{status}</span>
-      </div>
-    </div>
-  );
+	const settings = useStore((s) => s.settings);
+	const pop = useStore((s) => s.pop);
+	useEffect(() => {
+		const { loadDevices, loadAnalysisModels, loadGroqKey, loadHealth } = useStore.getState();
+		void loadDevices();
+		void loadAnalysisModels();
+		void loadGroqKey();
+		void loadHealth();
+	}, []);
+	if (!settings) return null;
+	return (
+		<div className="pg" data-screen-label="Configurações">
+			<h1 className="h1">Configurações</h1>
+			<p className="sub">Áudio, transcrição, análise e export.</p>
+			<AudioSection settings={settings} />
+			<TranscriptionSection settings={settings} />
+			<GroqKeySection />
+			<AnalysisSection settings={settings} />
+			<ExportSection settings={settings} />
+			<StatusSection settings={settings} />
+			<div className="pro">
+				<div>
+					<div className="fw7 fs15">Listening Resume Pro</div>
+					<p className="sub" style={{ maxWidth: 420 }}>
+						Templates ilimitados, exportação para Anki, e transcrição em lote.
+					</p>
+				</div>
+				<button type="button" className="btn" onClick={() => pop("Licença Pro — em breve", "ac")}>
+					Ativar licença
+				</button>
+			</div>
+		</div>
+	);
 }
