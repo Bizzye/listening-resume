@@ -22,5 +22,6 @@
 	"type": "module",
 	"devDependencies": {
 		"esbuild": "^0.28.0"
-	}
+	},
+	"license": "MIT"
 }
