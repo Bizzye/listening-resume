@@ -2,9 +2,10 @@
 
 # 🎧 Listening Resume
 
-**Grave qualquer áudio do seu computador, transforme em texto e receba um resumo pronto.**
+**Assista à aula. As anotações ficam por conta dele.**
 
-Aulas, reuniões, podcasts e entrevistas viram anotações organizadas com um clique.
+Grave videoaulas, vídeos do YouTube, reuniões e podcasts direto do seu computador,
+transforme em texto e receba um resumo pronto para estudar ou relembrar o conteúdo.
 
 [![Baixar para Windows](https://img.shields.io/badge/⬇%20Baixar%20para%20Windows-instalador%20.exe-7a6bff?style=for-the-badge)](https://github.com/Bizzye/listening-resume/releases/latest)
 
@@ -14,6 +15,7 @@ Aulas, reuniões, podcasts e entrevistas viram anotações organizadas com um cl
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-WASAPI-000000?logo=rust&logoColor=white)
 ![Testes](https://img.shields.io/badge/testes%20automatizados-660%2B-3ecf8e)
+![Licença MIT](https://img.shields.io/badge/licença-MIT-f2a83b)
 
 ![Tela de gravação com a onda reagindo ao som de verdade](docs/images/19-real-gravacao-onda.png)
 
@@ -23,13 +25,19 @@ Aulas, reuniões, podcasts e entrevistas viram anotações organizadas com um cl
 
 ---
 
+## 🎓 Por que eu criei
+
+Eu estudo muito por videoaula e vídeo do YouTube, e vivia pausando a cada 30 segundos para anotar. Uma aula de 1 hora virava 2, e no fim eu tinha um caderno bagunçado.
+
+Então escrevi um app que grava o que está tocando no computador, transcreve e monta o caderno da aula sozinho. Agora eu presto atenção na aula, e as anotações saem prontas no final.
+
 ## 💡 O que é
 
 O **Listening Resume** é um aplicativo para computador que funciona como um "gravador inteligente":
 
-1. **Grava** o som que está tocando no PC (uma videoaula, uma reunião no Meet/Teams, um podcast) junto com a sua voz no microfone.
+1. **Grava** o som que está tocando no PC (uma videoaula, um vídeo do YouTube, uma reunião no Meet/Teams, um podcast) junto com a sua voz no microfone.
 2. **Transcreve** tudo automaticamente, ou seja, transforma o áudio em texto, com o horário de cada fala.
-3. **Resume** o conteúdo com inteligência artificial, no formato que você escolher: resumo executivo, ata de reunião, caderno de aula, flashcards para estudar ou artigo.
+3. **Resume** o conteúdo com inteligência artificial, no formato que você escolher: caderno completo da aula (conceitos, fórmulas, exercícios e glossário), flashcards para revisar, resumo executivo, ata de reunião ou artigo.
 4. **Exporta** o resultado para Word, PDF ou Markdown.
 
 Tudo em português e com uma interface simples, pensada para quem não é da área de tecnologia.
@@ -44,7 +52,7 @@ Tudo em português e com uma interface simples, pensada para quem não é da ár
 | 🖥️ **Opção "Padrão do sistema"** | Usa automaticamente o dispositivo que o Windows está usando, mesmo se ele mudar no meio do caminho |
 | 🔇 **Silenciar por fonte** | Desliga só o microfone ou só o som do PC da gravação, e avisa se nada estiver sendo captado |
 | 📝 **Transcrição com horário** | Clique em uma frase e o áudio pula para aquele momento |
-| 🧠 **Resumos prontos em pt-BR** | Modelos de Videoaula, Ata de Reunião, Resumo Executivo, Flashcards (Anki) e Podcast → Artigo, além dos que você criar |
+| 🧠 **Resumos prontos em pt-BR** | Modelos de Videoaula (caderno da aula e estudo completo em 12 seções), Flashcards (Anki), Resumo Executivo, Ata de Reunião e Podcast → Artigo, além dos que você criar |
 | 📤 **Exporta para Word, PDF e Markdown** | Salva na pasta que você escolher |
 | 📥 **Importa arquivos** | Também transcreve áudios e vídeos que você já tem |
 | 🌗 **Tema claro e escuro** | |
@@ -106,7 +114,7 @@ O desenvolvimento foi organizado em sprints curtas, cada uma com um objetivo cla
 
 ## ✅ Qualidade em números
 
-- **660+ testes automáticos** em três camadas: 545 testes de unidade, 85 de integração e 29 de ponta a ponta (o robô abre o app, grava, transcreve, resume e exporta).
+- **660+ testes automáticos** em três camadas: 548 testes de unidade, 85 de integração e 29 de ponta a ponta (o robô abre o app, grava, transcreve, resume e exporta).
 - **Teste em hardware real**: a duração gravada bateu com o relógio com diferença de até **0,05 segundo**.
 - **Segurança**: o app só aceita conexões do próprio computador e bloqueia sites que tentem controlá-lo.
 - **Privacidade**: gravações, textos e resumos ficam salvos **no seu computador**. Só vai para a internet o que for enviado ao serviço de IA que você escolher.
@@ -179,6 +187,10 @@ docs/images/        prints de todas as telas (gerados por `pnpm screenshots`)
 
 </details>
 
+## 👋 Autor
+
+Feito por [@Bizzye](https://github.com/Bizzye). Se o app te ajudou a estudar, deixa uma ⭐ no repositório e me conta o que achou nas [issues](https://github.com/Bizzye/listening-resume/issues).
+
 ## 📄 Licença
 
-Projeto pessoal.
+Código aberto sob a licença [MIT](LICENSE): pode usar, estudar, modificar e distribuir, mantendo o aviso de copyright.
